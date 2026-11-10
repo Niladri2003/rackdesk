@@ -57,8 +57,18 @@ Developers, indie hackers and small teams running their own VPS or home server. 
   - a path that doesn't exist
   - the server disconnected
 
-### 4. Settings window
-Account (change password), appearance (theme, accent, wallpaper), and About (server info and version).
+### 4. Settings app
+A full app in its own window, with a sidebar of sections, a search box that finds any setting, and a clear saved or unsaved state. Settings that need a restart say so. Dangerous changes ask for the password again.
+
+**v1 sections (design in full):**
+- **Account:** username; change password (current, new, confirm, with a strength meter and a minimum-12-characters hint); sign out.
+- **Sessions:** where you're signed in (browser, IP, last active, "this device"), with Sign out for each and "Sign out everywhere else".
+- **Appearance:** theme (light, dark, system); accent colour; wallpaper (built-in choices plus upload); density (comfortable, compact); text size; reduce motion.
+- **Files:** show hidden files; default view (list or grid); default sort; confirm before moving to Trash; empty Trash after N days; the folder shown as "/" (read-only in v1, with a note on how to change it).
+- **Access and security:** listening address and port, HTTPS certificate status (self-signed or custom, with expiry date), and failed sign-in attempts. Read-only in v1, with "edit the config file to change this" hints.
+- **About:** hostname, OS and kernel, CPU and RAM, uptime, Webdesk version, a "check for updates" button, licences.
+
+**Later sections (light sketches only):** two-factor authentication and passkeys, users and roles, notifications, apps (installed apps, their permissions and resource limits), backup and restore of settings, and the audit log.
 
 ### 5. Notifications
 Toasts for success, error and long-running progress, plus a notification list.
