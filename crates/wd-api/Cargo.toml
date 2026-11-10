@@ -1,0 +1,17 @@
+[package]
+name = "wd-api"
+description = "Types shared by the server and the web UI (exported to TypeScript with ts-rs)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

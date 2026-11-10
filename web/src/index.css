@@ -1,0 +1,32 @@
+:root {
+  --bg: #f7f7f5;
+  --fg: #1c1c1a;
+  --muted: #6b6b66;
+  --danger: #b42318;
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615;
+    --fg: #ededea;
+    --muted: #9a9a94;
+    --danger: #f97066;
+  }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+.placeholder {
+  max-width: 40rem;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--danger);
+}

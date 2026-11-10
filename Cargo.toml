@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = ["crates/wd-api", "crates/wd-fs", "crates/wd-auth", "crates/webdeskd"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+wd-api = { path = "crates/wd-api" }
+wd-fs = { path = "crates/wd-fs" }
+wd-auth = { path = "crates/wd-auth" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs"] }
+axum = "0.8"
+tower-http = { version = "0.7", features = ["set-header", "limit"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ts-rs = "12"
+cap-std = "4"
+argon2 = "0.5"
+getrandom = "0.3"
+rust-embed = "8"
+mime_guess = "2"
+tempfile = "3"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
