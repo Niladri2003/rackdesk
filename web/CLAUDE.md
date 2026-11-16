@@ -2,7 +2,7 @@
 
 Read the root `CLAUDE.md` first. This file covers the React app in `web/`.
 
-**Status:** `src/App.tsx` is a placeholder that proves the wiring (the UI calls the API and uses the generated types). The real desktop shell is built in M2 from the Claude Design handoff (`docs/design/CLAUDE-DESIGN-PROMPT.md`). Don't invent a visual design before the handoff arrives.
+**Status:** `src/App.tsx` holds plain sign-in and change-password pages and a placeholder for the signed-in state. The real desktop shell is built in M2 from the Claude Design handoff (`docs/design/CLAUDE-DESIGN-PROMPT.md`). Don't invent a visual design before the handoff arrives.
 
 ## Commands
 ```sh
@@ -21,7 +21,8 @@ There's no test runner yet. Playwright and axe checks are added in M2.
 ## Talking to the server
 - `src/api/generated/*.ts` is written by `cargo test -p rd-api`. **Never edit it by hand.** To change a type, change the Rust type in `crates/rd-api`.
 - All requests go through `src/api/client.ts`. No `fetch` calls in components.
-- Errors are `ApiFailure` with a stable `code`. Branch on `code`, never on the message text.
+- Errors are `ApiFailure` with a stable `code`. Branch on `code`, never on the message text. The text shown for each code is in `src/messages.ts`.
+- A request that fails with `unauthorized` means the session ended: show the sign-in page.
 - Requests are same-origin with `credentials: 'same-origin'`. The session is an `HttpOnly` cookie, so JavaScript never sees or stores a token. Don't put secrets in `localStorage`.
 
 ## Security rules for the UI

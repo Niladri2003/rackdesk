@@ -3,6 +3,9 @@
   --fg: #1c1c1a;
   --muted: #6b6b66;
   --danger: #b42318;
+  --border: #8a8a84;
+  --field: #ffffff;
+  --focus: #1d4ed8;
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
 }
@@ -12,6 +15,9 @@
     --fg: #ededea;
     --muted: #9a9a94;
     --danger: #f97066;
+    --border: #7c7c76;
+    --field: #1f1f1d;
+    --focus: #93c5fd;
   }
 }
 body {
@@ -19,10 +25,59 @@ body {
   background: var(--bg);
   color: var(--fg);
 }
-.placeholder {
-  max-width: 40rem;
+.page {
+  max-width: 24rem;
   margin: 4rem auto;
   padding: 0 1rem;
+}
+.form {
+  display: grid;
+  gap: 0.75rem;
+}
+.form h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.form label {
+  display: grid;
+  gap: 0.25rem;
+}
+input,
+button {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+input {
+  background: var(--field);
+  color: var(--fg);
+}
+button {
+  background: var(--fg);
+  color: var(--bg);
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--fg);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.row {
+  display: flex;
+  gap: 0.5rem;
+}
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
 }
 .muted {
   color: var(--muted);

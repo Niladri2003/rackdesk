@@ -104,11 +104,40 @@ pub struct AppManifest {
 
 // ---------- Session ----------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+/// Body of `POST /api/v1/session`.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+}
+
+/// Body of `POST /api/v1/session/password`.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+// `Debug` is written by hand for the 2 types above, so a password can't reach
+// a log line through `{:?}`.
+impl std::fmt::Debug for LoginRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginRequest")
+            .field("username", &self.username)
+            .field("password", &"<hidden>")
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for ChangePasswordRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChangePasswordRequest")
+            .field("current_password", &"<hidden>")
+            .field("new_password", &"<hidden>")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -135,6 +164,15 @@ pub struct ApiError {
     pub message: String,
 }
 
+impl ApiError {
+    pub fn new(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.to_owned(),
+            message: message.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,5 +193,20 @@ mod tests {
         assert_eq!(v["component"], "Files");
         let back: AppManifest = serde_json::from_value(v).unwrap();
         assert_eq!(back, m);
+    }
+
+    #[test]
+    fn debug_output_hides_passwords() {
+        let login = LoginRequest {
+            username: "admin".into(),
+            password: "secret-one".into(),
+        };
+        let change = ChangePasswordRequest {
+            current_password: "secret-two".into(),
+            new_password: "secret-three".into(),
+        };
+        let text = format!("{login:?} {change:?}");
+        assert!(text.contains("admin"));
+        assert!(!text.contains("secret"));
     }
 }

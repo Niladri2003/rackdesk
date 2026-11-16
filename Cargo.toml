@@ -19,9 +19,18 @@ serde_json = "1"
 thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "sync"] }
 axum = "0.8"
 tower-http = { version = "0.7", features = ["set-header", "limit"] }
+# HTTPS: the TLS listener, and the self-signed certificate made on first start.
+# `ring` is the crypto library for both, so the build needs no C toolchain
+# beyond what `ring` itself uses.
+axum-server = { version = "0.9", features = ["tls-rustls-ring"] }
+rcgen = "0.14"
+rustls-pki-types = "1"
+# SHA-256 fingerprint of the certificate, printed at start.
+sha2 = "0.11"
+time = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ts-rs = "12"
@@ -31,12 +40,22 @@ getrandom = "0.3"
 rust-embed = "8"
 mime_guess = "2"
 tempfile = "3"
+# Tests only: drive the router in-process.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
 undocumented_unsafe_blocks = "warn"
+
+# Password hashing is slow by design. Without optimisation it is about 10 times
+# slower still, which makes sign-in and the tests slow in debug builds.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
 
 [profile.release]
 lto = "thin"
