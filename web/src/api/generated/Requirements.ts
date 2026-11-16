@@ -3,6 +3,6 @@ import type { GpuNeed } from "./GpuNeed";
 
 /**
  * What an app needs from the server. The app store hides or greys out apps
- * that don't fit (v3).
+ * that don't fit.
  */
 export type Requirements = { min_memory_bytes: number | null, min_cpus: number | null, gpu: GpuNeed, };

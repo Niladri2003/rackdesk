@@ -48,8 +48,9 @@ pub struct DirListing {
 }
 
 // ---------- Apps and windows ----------
-// v1 only ships built-in apps, but the shape is fixed now so terminal apps,
-// web apps and streamed GUI apps slot in later without a redesign.
+// Only built-in apps exist today. The other kinds are defined now so that
+// adding terminal apps, web apps and streamed GUI apps does not change the
+// shape of the API.
 
 /// How an app runs. This decides which kind of window content shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -58,16 +59,16 @@ pub struct DirListing {
 pub enum AppKind {
     /// A React app shipped inside the UI bundle (Files, Settings, ...).
     Builtin { component: String },
-    /// A terminal program run in a terminal window (v2), e.g. `btop`.
+    /// A terminal program run in a terminal window, e.g. `btop`.
     Tui { command: Vec<String> },
-    /// A web UI served by a local process and reverse-proxied into a window (v2).
+    /// A web UI served by a local process and reverse-proxied into a window.
     Web { port: u16 },
-    /// A desktop GUI app streamed into a window (future).
+    /// A desktop GUI app streamed into a window.
     Gui { command: Vec<String> },
 }
 
 /// What an app needs from the server. The app store hides or greys out apps
-/// that don't fit (v3).
+/// that don't fit.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Requirements {

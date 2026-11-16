@@ -1,9 +1,9 @@
 //! `rackdeskd`: one binary that serves the API and the web UI.
 //!
-//! M0 scope: start-up (data dir, random initial admin password), `/healthz`,
-//! `/api/v1/server`, and the embedded UI. Sign-in, sessions and the files API
-//! land in M1 and M3 (docs/ROADMAP.md). The files API stays unrouted until
-//! sessions exist, so nothing here can read files without signing in.
+//! It does start-up (data dir, random initial admin password) and serves
+//! `/healthz`, `/api/v1/server` and the embedded UI. There is no sign-in yet.
+//! The files API has no route until sessions exist, so nothing here can read
+//! files without signing in.
 
 mod ui;
 
@@ -25,7 +25,7 @@ struct Args {
     /// Where credentials and settings live. Production: /var/lib/rackdesk.
     #[arg(long, env = "RACKDESK_DATA_DIR", default_value = "./dev-data")]
     data_dir: PathBuf,
-    /// The folder the file browser shows as "/". Used from M3.
+    /// The folder the file browser shows as "/". No route uses it yet.
     #[arg(long, env = "RACKDESK_FILES_ROOT")]
     files_root: Option<PathBuf>,
 }
@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("binding {}", args.listen))?;
     if !args.listen.ip().is_loopback() {
-        tracing::warn!(addr = %args.listen, "listening on a non-loopback address; HTTPS arrives in M1, so use a TLS proxy until then");
+        tracing::warn!(addr = %args.listen, "listening on a non-loopback address; HTTPS is not built in yet, so use a TLS proxy");
     }
     tracing::info!(addr = %args.listen, "rackdeskd listening");
     axum::serve(listener, app)

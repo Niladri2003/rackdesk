@@ -95,8 +95,8 @@ impl Root {
 
     /// Lists one page of a folder: folders first, then case-insensitive by name.
     ///
-    /// M3 note: this reads the whole folder to sort it. That's fine up to
-    /// ~100k entries. Revisit with a cached, sorted index if needed.
+    /// This reads the whole folder to sort it. That's fine up to ~100k
+    /// entries. A larger folder needs a cached, sorted index.
     pub fn list(&self, ui_path: &str, offset: u32, limit: u32) -> Result<DirListing, FsError> {
         let rel = clean_path(ui_path)?;
         let dir = self.dir.open_dir(&rel)?;
