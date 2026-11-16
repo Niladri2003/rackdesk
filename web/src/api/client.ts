@@ -22,6 +22,23 @@ export class ApiFailure extends Error {
   }
 }
 
+let onNetworkFailure: () => void = () => {}
+
+/** The shell registers a function here to learn that a request got no answer. */
+export function setNetworkFailureHandler(handler: () => void): void {
+  onNetworkFailure = handler
+}
+
+/** True when the server answers. It needs no session. */
+export async function serverIsUp(): Promise<boolean> {
+  try {
+    const res = await fetch('/healthz', { cache: 'no-store' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response
   try {
@@ -32,6 +49,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
+    onNetworkFailure()
     throw new ApiFailure(0, { code: 'network', message: 'The server did not answer.' })
   }
   if (!res.ok) {

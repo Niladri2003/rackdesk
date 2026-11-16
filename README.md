@@ -6,7 +6,7 @@ A desktop for your Linux server, in the browser. Install one small program, open
 - Secure by default: random first password, localhost unless you choose otherwise, all file access confined (see `docs/security/SECURITY.md`).
 - Access it however you like: LAN, reverse proxy, SSH forward, VPN or a tunnel.
 
-**Status:** M1 is done: sign-in, sessions and HTTPS work. The desktop (M2) is next. See `docs/ROADMAP.md`.
+**Status:** M2 is done: sign-in, sessions, HTTPS and the desktop (windows, taskbar, search, Settings) work. The file browser (M3) is next. See `docs/ROADMAP.md`.
 
 | Read | For |
 |---|---|
