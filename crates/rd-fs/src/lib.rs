@@ -11,9 +11,9 @@
 
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
+use rd_api::{DirEntry, DirListing, EntryKind};
 use std::io;
 use std::path::{Path, PathBuf};
-use wd_api::{DirEntry, DirListing, EntryKind};
 
 /// Hard cap on one page of a listing. The UI pages through big folders.
 pub const MAX_PAGE: u32 = 5_000;

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/wd-api", "crates/wd-fs", "crates/wd-auth", "crates/webdeskd"]
+members = ["crates/rd-api", "crates/rd-fs", "crates/rd-auth", "crates/rackdeskd"]
 
 [workspace.package]
 version = "0.0.1"
@@ -9,9 +9,9 @@ rust-version = "1.85"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-wd-api = { path = "crates/wd-api" }
-wd-fs = { path = "crates/wd-fs" }
-wd-auth = { path = "crates/wd-auth" }
+rd-api = { path = "crates/rd-api" }
+rd-fs = { path = "crates/rd-fs" }
+rd-auth = { path = "crates/rd-auth" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

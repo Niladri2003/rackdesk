@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// In development, Vite serves the UI on :5173 and forwards API calls to webdeskd.
+// In development, Vite serves the UI on :5173 and forwards API calls to rackdeskd.
 export default defineConfig({
   plugins: [react()],
   server: {

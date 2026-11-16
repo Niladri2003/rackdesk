@@ -43,6 +43,6 @@ pub async fn serve(uri: Uri) -> Response {
     }
 }
 
-const PLACEHOLDER: &str = "<!doctype html><meta charset=utf-8><title>Webdesk</title>\
-<p style=\"font:16px system-ui;margin:3rem\">webdeskd is running. Build the UI with \
+const PLACEHOLDER: &str = "<!doctype html><meta charset=utf-8><title>RackDesk</title>\
+<p style=\"font:16px system-ui;margin:3rem\">rackdeskd is running. Build the UI with \
 <code>cd web &amp;&amp; npm run build</code>.</p>";

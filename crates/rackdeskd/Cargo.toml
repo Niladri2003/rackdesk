@@ -1,15 +1,15 @@
 [package]
-name = "webdeskd"
-description = "The Webdesk server: HTTP API + embedded web UI"
+name = "rackdeskd"
+description = "The RackDesk server: HTTP API + embedded web UI"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-wd-api.workspace = true
-wd-fs.workspace = true
-wd-auth.workspace = true
+rd-api.workspace = true
+rd-fs.workspace = true
+rd-auth.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

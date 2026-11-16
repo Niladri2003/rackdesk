@@ -1,6 +1,6 @@
-//! The API contract between `webdeskd` and the web UI.
+//! The API contract between `rackdeskd` and the web UI.
 //!
-//! Every type here derives `TS`. Running `cargo test -p wd-api` regenerates
+//! Every type here derives `TS`. Running `cargo test -p rd-api` regenerates
 //! `web/src/api/generated/*.ts`, so the frontend can't drift from the server.
 //! No I/O and no logic beyond small helpers.
 

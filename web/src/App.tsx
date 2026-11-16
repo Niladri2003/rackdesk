@@ -14,13 +14,13 @@ export default function App() {
 
   return (
     <main className="placeholder">
-      <h1>Webdesk</h1>
+      <h1>RackDesk</h1>
       {info && (
         <p>
           Connected to <code>{info.hostname}</code>, server v{info.version}.
         </p>
       )}
-      {error && <p className="error">Can't reach webdeskd: {error}</p>}
+      {error && <p className="error">Can't reach rackdeskd: {error}</p>}
       {!info && !error && <p>Connecting…</p>}
       <p className="muted">The desktop UI comes next, from the Claude Design handoff.</p>
     </main>

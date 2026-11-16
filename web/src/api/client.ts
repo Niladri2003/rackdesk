@@ -1,5 +1,5 @@
 // Thin fetch wrapper. Types come from Rust (src/api/generated, made by
-// `cargo test -p wd-api`), so a server change that breaks the UI fails `tsc`.
+// `cargo test -p rd-api`), so a server change that breaks the UI fails `tsc`.
 import type { ApiError } from './generated/ApiError'
 import type { ServerInfo } from './generated/ServerInfo'
 

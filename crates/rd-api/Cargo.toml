@@ -1,5 +1,5 @@
 [package]
-name = "wd-api"
+name = "rd-api"
 description = "Types shared by the server and the web UI (exported to TypeScript with ts-rs)"
 version.workspace = true
 edition.workspace = true

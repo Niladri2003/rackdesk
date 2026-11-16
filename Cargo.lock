@@ -715,10 +715,61 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "rackdeskd"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "mime_guess",
+ "rd-api",
+ "rd-auth",
+ "rd-fs",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+
+[[package]]
+name = "rd-api"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "rd-auth"
+version = "0.0.1"
+dependencies = [
+ "argon2",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "rd-fs"
+version = "0.0.1"
+dependencies = [
+ "cap-std",
+ "rd-api",
+ "tempfile",
+ "thiserror",
+]
 
 [[package]]
 name = "regex-automata"
@@ -1233,57 +1284,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487"
 dependencies = [
  "wit-bindgen",
-]
-
-[[package]]
-name = "wd-api"
-version = "0.0.1"
-dependencies = [
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
-name = "wd-auth"
-version = "0.0.1"
-dependencies = [
- "argon2",
- "getrandom 0.3.4",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "wd-fs"
-version = "0.0.1"
-dependencies = [
- "cap-std",
- "tempfile",
- "thiserror",
- "wd-api",
-]
-
-[[package]]
-name = "webdeskd"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "axum",
- "clap",
- "mime_guess",
- "rust-embed",
- "serde",
- "serde_json",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "wd-api",
- "wd-auth",
- "wd-fs",
 ]
 
 [[package]]

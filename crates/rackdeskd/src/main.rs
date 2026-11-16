@@ -1,4 +1,4 @@
-//! `webdeskd`: one binary that serves the API and the web UI.
+//! `rackdeskd`: one binary that serves the API and the web UI.
 //!
 //! M0 scope: start-up (data dir, random initial admin password), `/healthz`,
 //! `/api/v1/server`, and the embedded UI. Sign-in, sessions and the files API
@@ -11,22 +11,22 @@ use anyhow::Context;
 use axum::http::{header, HeaderValue};
 use axum::{routing::get, Json, Router};
 use clap::Parser;
+use rd_api::ServerInfo;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tower_http::set_header::SetResponseHeaderLayer;
-use wd_api::ServerInfo;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
     /// Address to listen on. Localhost by default: exposing it is a deliberate choice.
-    #[arg(long, env = "WEBDESK_LISTEN", default_value = "127.0.0.1:7171")]
+    #[arg(long, env = "RACKDESK_LISTEN", default_value = "127.0.0.1:7171")]
     listen: SocketAddr,
-    /// Where credentials and settings live. Production: /var/lib/webdesk.
-    #[arg(long, env = "WEBDESK_DATA_DIR", default_value = "./dev-data")]
+    /// Where credentials and settings live. Production: /var/lib/rackdesk.
+    #[arg(long, env = "RACKDESK_DATA_DIR", default_value = "./dev-data")]
     data_dir: PathBuf,
     /// The folder the file browser shows as "/". Used from M3.
-    #[arg(long, env = "WEBDESK_FILES_ROOT")]
+    #[arg(long, env = "RACKDESK_FILES_ROOT")]
     files_root: Option<PathBuf>,
 }
 
@@ -35,28 +35,28 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "webdeskd=info".into()),
+                .unwrap_or_else(|_| "rackdeskd=info".into()),
         )
         .init();
     let args = Args::parse();
 
-    let store = wd_auth::CredentialStore::new(&args.data_dir);
+    let store = rd_auth::CredentialStore::new(&args.data_dir);
     let (_creds, initial) = store
         .load_or_init()
         .context("loading or creating the admin account")?;
-    if let Some(wd_auth::InitialPassword(pw)) = initial {
+    if let Some(rd_auth::InitialPassword(pw)) = initial {
         // Printed once, to the terminal only. Never logged through tracing,
         // so it doesn't end up in log files or journald.
         println!();
-        println!("  Webdesk admin account created");
-        println!("  username: {}", wd_auth::ADMIN_USER);
+        println!("  RackDesk admin account created");
+        println!("  username: {}", rd_auth::ADMIN_USER);
         println!("  password: {pw}");
         println!("  You'll be asked to change it on first sign-in.");
         println!();
     }
 
     if let Some(root) = &args.files_root {
-        wd_fs::Root::open(root)
+        rd_fs::Root::open(root)
             .with_context(|| format!("opening files root {}", root.display()))?;
     }
 
@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
     if !args.listen.ip().is_loopback() {
         tracing::warn!(addr = %args.listen, "listening on a non-loopback address; HTTPS arrives in M1, so use a TLS proxy until then");
     }
-    tracing::info!(addr = %args.listen, "webdeskd listening");
+    tracing::info!(addr = %args.listen, "rackdeskd listening");
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
