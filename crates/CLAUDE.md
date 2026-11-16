@@ -9,7 +9,7 @@ Dependencies point one way. `rackdeskd` depends on `rd-fs` and `rd-auth`. Those 
 |---|---|---|
 | `rd-api` | Request and response types, enums, `ApiError` | I/O, logic, anything not sent over the wire |
 | `rd-fs` | Every operation on user files, as a method on `Root` | HTTP types, auth |
-| `rd-auth` | Passwords, the credential store, sessions (M1), rate limiting (M1) | HTTP types, file browsing |
+| `rd-auth` | Passwords, the credential store, sessions (`session`), the limit on password guessing (`limiter`) | HTTP types, file browsing |
 | `rackdeskd` | Routes, extractors, middleware, start-up, config | Path handling, password handling |
 
 A new area of work (terminal, services, helper protocol) gets its own `rd-*` crate, so it can be tested without the server.
@@ -36,11 +36,13 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 
 ## Endpoints
 - Routes are `/api/v1/...`. Unknown `/api/*` paths return 404, never the UI.
-- Handlers are thin: extract, check the session, call a library crate, map the error to `ApiError`.
-- Every state-changing route checks `Origin` or `Sec-Fetch-Site` (M1). WebSocket upgrades check them too.
+- Handlers are thin: extract, check the session, call a library crate, map the error to `ApiError`. They return `Result<_, ApiErr>` (`crates/rackdeskd/src/error.rs`).
+- A new route goes in the `protected` router in `crates/rackdeskd/src/lib.rs`. That router refuses requests with no session, and requests made before the initial password is changed.
+- Code that depends on time takes the time as an argument (`now: Instant`), as `rd_auth::session` does. Tests then need no sleep.
+- The CSRF check (`csrf.rs`) runs on every POST, PUT, PATCH and DELETE. A WebSocket upgrade is a GET, so it must call the same check itself.
 - Put a body size limit on every route that accepts a body.
 - Blocking work (file listing, argon2) runs in `tokio::task::spawn_blocking`, not on the async runtime.
-- Security headers are set once in `router()` in `crates/rackdeskd/src/main.rs`. Loosening the CSP needs a line in the security plan saying why.
+- Security headers are set once in `router()` in `crates/rackdeskd/src/lib.rs`. Loosening the CSP needs a line in the security plan saying why.
 
 ## Secrets
 - Compare secrets with a constant-time function. Password checks go through `rd_auth::verify_password`.
@@ -49,7 +51,7 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - Don't derive `Debug` on a type that holds a plaintext secret, or write a `Debug` that redacts it.
 
 ## Tests
-- Unit tests live in a `#[cfg(test)] mod tests` at the bottom of the file. Integration tests for `rackdeskd` go in `crates/rackdeskd/tests/` and drive the router in-process.
+- Unit tests live in a `#[cfg(test)] mod tests` at the bottom of the file. Integration tests for `rackdeskd` go in `crates/rackdeskd/tests/` and drive the router in-process. `tests/session.rs` has the helpers (`server()`, `call()`, `sign_in()`).
 - Use `tempfile::tempdir()` for anything on disk. Never write under the repo or `/tmp` by hand.
 - Unix-only tests get `#[cfg(unix)]`.
 - A security control isn't done until a test fails without it.

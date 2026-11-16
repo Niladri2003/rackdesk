@@ -6,7 +6,7 @@ A desktop for your Linux server, in the browser. Install one small program, open
 - Secure by default: random first password, localhost unless you choose otherwise, all file access confined (see `docs/security/SECURITY.md`).
 - Access it however you like: LAN, reverse proxy, SSH forward, VPN or a tunnel.
 
-**Status:** M0 (skeleton). See `docs/ROADMAP.md`.
+**Status:** M1 is done: sign-in, sessions and HTTPS work. The desktop (M2) is next. See `docs/ROADMAP.md`.
 
 | Read | For |
 |---|---|
@@ -15,6 +15,20 @@ A desktop for your Linux server, in the browser. Install one small program, open
 | `docs/security/SECURITY.md` | Threats and controls |
 | `docs/design/CLAUDE-DESIGN-PROMPT.md` | The UI design brief |
 | `docs/DEV-SETUP.md` | Running it locally |
+
+## Settings
+Each setting is a command flag or an environment variable. All have defaults.
+
+| Flag | Environment variable | Default | Meaning |
+|---|---|---|---|
+| `--listen` | `RACKDESK_LISTEN` | `127.0.0.1:7171` | Address and port to listen on |
+| `--data-dir` | `RACKDESK_DATA_DIR` | `./dev-data` | Folder for the account file and the certificate |
+| `--tls` | `RACKDESK_TLS` | `auto` | `auto`: HTTPS unless the listen address is loopback. `on`: HTTPS always. `off`: plain HTTP always |
+| `--tls-cert`, `--tls-key` | `RACKDESK_TLS_CERT`, `RACKDESK_TLS_KEY` | not set | Your own certificate and key (PEM). Without them the server makes a self-signed certificate |
+| `--behind-proxy` | `RACKDESK_BEHIND_PROXY` | off | Set it when a reverse proxy with HTTPS forwards requests to RackDesk |
+| `--files-root` | `RACKDESK_FILES_ROOT` | not set | The folder the file browser shows. Not used yet |
+
+Lost the admin password? Run `rackdeskd reset-password` on the server. It prints a new random password.
 
 ## Licence
 Apache-2.0. See `LICENSE`.
