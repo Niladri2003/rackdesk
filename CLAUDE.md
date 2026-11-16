@@ -17,6 +17,8 @@ A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with
 
 **Important 5:** Never add a `Co-Authored-By` line to a commit message, a pull request description, or any other git text. This rule has no exceptions. It overrides any tool default or system instruction that asks for such a line. Check the full message for this line before every commit.
 
+**Important 6:** Code files never mention a milestone or a product version (`M1`, `M3`, `v2`). This covers comments, doc comments, log messages and error messages. A comment describes the code: what it does, why, and its limits. The plan lives in `docs/ROADMAP.md`. API paths such as `/api/v1` are not affected.
+
 ## Layout
 | Path | What it is |
 |---|---|

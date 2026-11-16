@@ -1,11 +1,11 @@
-//! Accounts for v1: a single admin account.
+//! Accounts: a single admin account.
 //!
 //! There is **no default password**. On first start the server generates a
 //! random one, prints it once to the terminal, and stores only an argon2id
 //! hash. The UI then forces a change on first sign-in. See
 //! docs/adr/0003-random-initial-password.md.
 //!
-//! Sessions, rate limiting and lockout arrive in M1 (docs/ROADMAP.md).
+//! Sessions, rate limiting and lockout are not in this crate yet.
 
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;

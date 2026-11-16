@@ -56,5 +56,5 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 
 ## Style
 - Each file starts with a `//!` comment saying what it's for and which doc or ADR explains the choice.
-- Comments explain why, and mention the milestone when something is deliberately left for later (`M3 note: ...`).
+- Comments explain what the code does and why. They never name a milestone or a version (`M3`, `v2`). Write "not built yet" or state the limit. The plan lives in `docs/ROADMAP.md`.
 - Run `cargo fmt --all` and fix every clippy warning; CI uses `-D warnings`.
