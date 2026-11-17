@@ -3,6 +3,7 @@
 //!
 //! The rules come from docs/security/SECURITY.md, rows A2 to A5.
 
+use crate::audit::Actor;
 use crate::error::ApiErr;
 use crate::state::AppState;
 use axum::extract::rejection::JsonRejection;
@@ -114,13 +115,22 @@ fn client_ip(state: &AppState, headers: &HeaderMap, peer: SocketAddr) -> IpAddr 
 /// session, and the initial password must have been changed.
 pub async fn require_active_session(
     State(state): State<AppState>,
-    req: Request,
+    mut req: Request,
     next: Next,
 ) -> Result<Response, ApiErr> {
     let authed = authenticate(&state, req.headers()).await?;
     if authed.must_change_password {
         return Err(ApiErr::password_change_required());
     }
+    // Handlers that change something read this for the audit log.
+    let ip = match req.extensions().get::<ConnectInfo<SocketAddr>>() {
+        Some(ConnectInfo(peer)) => client_ip(&state, req.headers(), *peer),
+        None => IpAddr::from([0, 0, 0, 0]),
+    };
+    req.extensions_mut().insert(Actor {
+        username: authed.username,
+        ip,
+    });
     Ok(next.run(req).await)
 }
 
@@ -141,7 +151,12 @@ pub async fn sign_in(
 ) -> Result<Response, ApiErr> {
     let Json(login) = body?;
     let now = Instant::now();
-    let ip = client_ip(&state, &headers, peer).to_string();
+    let actor = Actor {
+        // The name that was typed. It may not be an account.
+        username: login.username.chars().take(64).collect(),
+        ip: client_ip(&state, &headers, peer),
+    };
+    let ip = actor.ip.to_string();
     let creds = state.credentials().await?;
     let known_user = login.username == creds.username;
 
@@ -165,6 +180,9 @@ pub async fn sign_in(
             state.account_limiter().failure(&creds.username, now);
         }
         tracing::warn!(%ip, "failed sign-in");
+        state
+            .audit()
+            .record(&actor, "session.sign_in", "", Err("invalid_credentials"));
         return Err(ApiErr::invalid_credentials());
     }
 
@@ -179,6 +197,7 @@ pub async fn sign_in(
         .create(&creds.username, now)
         .map_err(ApiErr::internal)?;
     tracing::info!(%ip, "signed in");
+    state.audit().record(&actor, "session.sign_in", "", Ok(()));
     Ok(with_new_session(
         &state,
         &id,
@@ -260,6 +279,13 @@ pub async fn change_password(
         .create(&creds.username, now)
         .map_err(ApiErr::internal)?;
     tracing::info!(%ip, "password changed");
+    let actor = Actor {
+        username: authed.username.clone(),
+        ip: client_ip(&state, &headers, peer),
+    };
+    state
+        .audit()
+        .record(&actor, "session.change_password", "", Ok(()));
     Ok(with_new_session(
         &state,
         &id,

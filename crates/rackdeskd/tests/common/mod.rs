@@ -36,20 +36,31 @@ pub async fn server() -> Server {
 }
 
 pub async fn server_with(https: bool, behind_proxy: bool) -> Server {
+    server_from(|config| {
+        config.https = https;
+        config.behind_proxy = behind_proxy;
+    })
+    .await
+}
+
+/// A server whose settings are changed by `edit` before it starts.
+pub async fn server_from(edit: impl FnOnce(&mut Config)) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let store = rd_auth::CredentialStore::new(dir.path());
     let (creds, initial) = store.load_or_init().unwrap();
     let files_root = dir.path().join("files");
     std::fs::create_dir(&files_root).unwrap();
-    let config = Config {
+    let mut config = Config {
         data_dir: dir.path().to_owned(),
         files_root: files_root.clone(),
         // Larger than any disk, so a test can ask for more than the free
         // space without reaching this limit first.
         max_upload_bytes: u64::MAX / 4,
-        https,
-        behind_proxy,
+        helper_socket: None,
+        https: false,
+        behind_proxy: false,
     };
+    edit(&mut config);
     let files = rd_fs::Root::open(&files_root).unwrap();
     let state = AppState::new(config, creds, files).await.unwrap();
     Server {

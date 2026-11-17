@@ -5,22 +5,24 @@
 //! The rules for serving file content are in docs/security/SECURITY.md, F1
 //! and F2.
 
+use crate::audit::Actor;
 use crate::error::ApiErr;
+use crate::helper::no_helper;
 use crate::state::AppState;
 use axum::body::Body;
 use axum::extract::rejection::QueryRejection;
-use axum::extract::{Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use rd_api::{DirEntry, DirListing, Disk, EntryKind, Places, SearchResults, SortKey};
-use rd_fs::{FsError, ListOptions, Root, SearchLimits};
+use rd_fs::{ArchiveLimits, FsError, ListOptions, Root, SearchLimits};
 use serde::Deserialize;
 use std::io::SeekFrom;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tokio_util::io::ReaderStream;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio_util::io::{ReaderStream, SyncIoBridge};
 
 /// Entries on a page when the request gives no limit.
 const DEFAULT_PAGE: u32 = 200;
@@ -41,6 +43,7 @@ impl From<FsError> for ApiErr {
             FsError::NotFound => StatusCode::NOT_FOUND,
             FsError::PermissionDenied => StatusCode::FORBIDDEN,
             FsError::InvalidPath(_)
+            | FsError::BadArchive(_)
             | FsError::NotADirectory
             | FsError::NotAFile
             | FsError::CrossDevice
@@ -133,7 +136,7 @@ pub async fn list(
 
 #[derive(Debug, Deserialize)]
 pub struct PathQuery {
-    path: String,
+    pub(crate) path: String,
 }
 
 /// `GET /api/v1/fs/entry`
@@ -299,6 +302,10 @@ pub struct DownloadQuery {
     /// agrees only for the types in [`inline_type`].
     #[serde(default)]
     inline: bool,
+    /// Read the file through the root helper. For a file that the server
+    /// itself may not read.
+    #[serde(default)]
+    elevate: bool,
 }
 
 /// The content type for a file that may be shown inside the RackDesk page:
@@ -407,6 +414,7 @@ fn content_disposition(kind: &str, name: &str) -> HeaderValue {
 /// page only on request, and only for the types in [`inline_type`].
 pub async fn download(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     headers: HeaderMap,
     query: Result<Query<DownloadQuery>, QueryRejection>,
 ) -> Result<Response, ApiErr> {
@@ -418,6 +426,12 @@ pub async fn download(
         .next()
         .unwrap_or_default()
         .to_owned();
+    if q.elevate {
+        let started = download_as_root(&state, &q.path, &name).await;
+        let result = started.as_ref().map(|_| ()).map_err(ApiErr::code);
+        state.audit().record(&actor, "helper.read", &q.path, result);
+        return started;
+    }
     let path = q.path;
     let open = blocking(&state, move |root| root.open_file(&path)).await?;
     let len = open.len;
@@ -494,6 +508,117 @@ pub async fn download(
             HeaderValue::from_static(FILE_CSP),
         );
     }
+    Ok(res)
+}
+
+/// Sends a file that the root helper reads, part by part. Always as a
+/// download, never shown in the page.
+async fn download_as_root(state: &AppState, path: &str, name: &str) -> Result<Response, ApiErr> {
+    use rd_helper_proto::{Request, Response as Answer, MAX_READ_BYTES};
+    let helper = state.helper().ok_or_else(no_helper)?.clone();
+    // Asked first, so a wrong path gets a JSON error and not an empty file.
+    let (stat, _) = helper
+        .call(Request::Stat {
+            path: path.to_owned(),
+        })
+        .await?;
+    if !matches!(stat, Answer::Stat { is_file: true, .. }) {
+        return Err(FsError::NotAFile.into());
+    }
+
+    let (reader, mut writer) = tokio::io::duplex(CHUNK_BYTES);
+    let path = path.to_owned();
+    tokio::spawn(async move {
+        let mut offset = 0u64;
+        loop {
+            let part = Request::Read {
+                path: path.clone(),
+                offset,
+                len: MAX_READ_BYTES,
+            };
+            match helper.call(part).await {
+                // An empty part is the end of the file.
+                Ok((_, data)) if !data.is_empty() => {
+                    if writer.write_all(&data).await.is_err() {
+                        break;
+                    }
+                    offset += data.len() as u64;
+                }
+                _ => break,
+            }
+        }
+    });
+
+    let mut res = Response::new(Body::from_stream(ReaderStream::with_capacity(
+        reader,
+        CHUNK_BYTES,
+    )));
+    let h = res.headers_mut();
+    h.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    h.insert(
+        header::CONTENT_DISPOSITION,
+        content_disposition("attachment", name),
+    );
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(FILE_CSP),
+    );
+    Ok(res)
+}
+
+/// `GET /api/v1/fs/zip`
+///
+/// Sends a file or a folder as a zip archive. The archive is made while it
+/// is sent: it is never stored on the server, and the first bytes leave at
+/// once, whatever the size of the folder.
+pub async fn download_zip(
+    State(state): State<AppState>,
+    query: Result<Query<PathQuery>, QueryRejection>,
+) -> Result<Response, ApiErr> {
+    let Query(q) = query?;
+    // Checked first, so a path that is wrong gets a JSON error and not a
+    // broken archive.
+    let path = q.path.clone();
+    let entry = blocking(&state, move |root| root.entry(&path)).await?;
+    let name = if entry.name == "/" {
+        "files".to_owned()
+    } else {
+        entry.name
+    };
+
+    // The archive is written by a blocking task into one end of a pipe.
+    // The response body reads the other end.
+    let (reader, writer) = tokio::io::duplex(CHUNK_BYTES);
+    let root = state.files();
+    tokio::task::spawn_blocking(move || {
+        let out = SyncIoBridge::new(writer);
+        if let Err(e) = root.zip_to(&q.path, out, &ArchiveLimits::default()) {
+            // The download has started, so the status can't change now. The
+            // client gets an archive that ends early.
+            tracing::warn!(code = e.code(), "a zip download stopped early");
+        }
+    });
+
+    let mut res = Response::new(Body::from_stream(ReaderStream::with_capacity(
+        reader,
+        CHUNK_BYTES,
+    )));
+    let h = res.headers_mut();
+    h.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/zip"),
+    );
+    h.insert(
+        header::CONTENT_DISPOSITION,
+        content_disposition("attachment", &format!("{name}.zip")),
+    );
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(FILE_CSP),
+    );
     Ok(res)
 }
 

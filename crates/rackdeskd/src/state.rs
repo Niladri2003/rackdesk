@@ -1,7 +1,9 @@
 //! State shared by every request: the account, the sessions and the limiters.
 
+use crate::audit::AuditLog;
 use crate::error::ApiErr;
 use crate::files_write::Upload;
+use crate::helper::Helper;
 use rd_auth::limiter::{Limiter, Policy};
 use rd_auth::session::SessionStore;
 use rd_auth::{CredentialStore, Credentials};
@@ -23,6 +25,8 @@ pub struct Config {
     pub data_dir: PathBuf,
     /// The folder the file browser shows as "/".
     pub files_root: PathBuf,
+    /// The socket of the root helper. `None`: no action is done as root.
+    pub helper_socket: Option<PathBuf>,
     /// Largest file that can be uploaded, in bytes.
     pub max_upload_bytes: u64,
     /// True when browsers reach the server over HTTPS. The session cookie is
@@ -46,6 +50,8 @@ struct Inner {
     hashing: Semaphore,
     files: Arc<Root>,
     searches: Semaphore,
+    audit: AuditLog,
+    helper: Option<Helper>,
     /// Uploads in progress, by id.
     uploads: std::sync::Mutex<HashMap<String, Upload>>,
     /// Checked when the username is unknown, so that case takes as long as a
@@ -91,8 +97,11 @@ impl AppState {
         files: Root,
     ) -> Result<Self, rd_auth::AuthError> {
         let store = CredentialStore::new(&config.data_dir);
+        let audit = AuditLog::open(&config.data_dir)
+            .map_err(|e| rd_auth::AuthError::Store(format!("audit log: {e}")))?;
         let stamp = FileStamp::read(store.path()).await;
         let dummy_hash = rd_auth::hash_password(&rd_auth::generate_password()?)?;
+        let helper = config.helper_socket.clone().map(Helper::new);
         Ok(Self(Arc::new(Inner {
             config,
             store,
@@ -103,6 +112,8 @@ impl AppState {
             hashing: Semaphore::new(HASHES_AT_ONCE),
             files: Arc::new(files),
             searches: Semaphore::new(SEARCHES_AT_ONCE),
+            audit,
+            helper,
             uploads: std::sync::Mutex::new(HashMap::new()),
             dummy_hash,
         })))
@@ -120,6 +131,15 @@ impl AppState {
     /// Waits for a free search slot.
     pub async fn search_permit(&self) -> Result<SemaphorePermit<'_>, ApiErr> {
         self.0.searches.acquire().await.map_err(ApiErr::internal)
+    }
+
+    /// The root helper, if this server has one.
+    pub fn helper(&self) -> Option<&Helper> {
+        self.0.helper.as_ref()
+    }
+
+    pub fn audit(&self) -> &AuditLog {
+        &self.0.audit
     }
 
     fn uploads(&self) -> std::sync::MutexGuard<'_, HashMap<String, Upload>> {

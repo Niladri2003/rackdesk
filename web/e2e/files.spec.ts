@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -277,6 +277,24 @@ for (const scheme of ['light', 'dark'] as const) {
     await win.getByRole('navigation', { name: 'Places' }).getByRole('button', { name: 'Trash' }).click()
     await expect(win.getByText('The Trash is empty.')).toBeVisible()
     await expectAccessible(page)
+
+    // Properties. A ticked box must set the right permission bit on disk.
+    const onDisk = join(filesRoot(), 'notes.txt')
+    chmodSync(onDisk, 0o644)
+    await goTo(page, win, '/')
+    await win.getByRole('option', { name: /notes\.txt/ }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Properties' }).click()
+    const props = page.getByRole('dialog', { name: 'Properties of notes.txt' })
+    await expect(props.getByRole('checkbox', { name: 'Owner: Read' })).toBeChecked()
+    await expect(props.getByRole('checkbox', { name: 'Others: Write' })).not.toBeChecked()
+    await expectAccessible(page)
+    await props.getByRole('checkbox', { name: 'Others: Write' }).check()
+    await props.getByRole('checkbox', { name: 'Group: Read' }).uncheck()
+    await expect(props.getByText('Mode 606')).toBeVisible()
+    await props.getByRole('button', { name: 'Apply' }).click()
+    await expect(props).toHaveCount(0)
+    expect(statSync(onDisk).mode & 0o777).toBe(0o606)
+    chmodSync(onDisk, 0o644)
 
     await page.keyboard.press('Control+k')
     await page.getByRole('combobox').fill('compose')

@@ -10,6 +10,8 @@ Dependencies point one way. `rackdeskd` depends on `rd-fs` and `rd-auth`. Those 
 | `rd-api` | Request and response types, enums, `ApiError` | I/O, logic, anything not sent over the wire |
 | `rd-fs` | Every operation on user files, as a method on `Root` | HTTP types, auth |
 | `rd-auth` | Passwords, the credential store, sessions (`session`), the limit on password guessing (`limiter`) | HTTP types, file browsing |
+| `rd-helper-proto` | The `Request` and `Response` of the root helper, and the frame format | Anything that touches files |
+| `rackdesk-helper` | The root program: the socket, the check of the caller, and `handle()` | Async code, HTTP, new actions without a security plan row |
 | `rackdeskd` | Routes, extractors, middleware, start-up, config | Path handling, password handling |
 
 A new area of work (terminal, services, helper protocol) gets its own `rd-*` crate, so it can be tested without the server.
@@ -48,6 +50,17 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - Put a body size limit on every route that accepts a body. The API default is 8 KiB. A route that takes file content sets its own, as the save and chunk routes do in `lib.rs`.
 - Blocking work (file listing, argon2) runs in `tokio::task::spawn_blocking`, not on the async runtime.
 - Security headers are set once in `router()` in `crates/rackdeskd/src/lib.rs`. Loosening the CSP needs a line in the security plan saying why.
+
+## The root helper
+- `Request` in `rd-helper-proto` is the full list of what can be done as root. A new action needs a row in the security plan first, then a case in `handle()`, then a row in the test `every_action_stays_beneath_the_files_root`.
+- The helper stays small: no async runtime, no HTTP, no config file. Every path goes through `rd_fs::Root`.
+- The server calls the helper only for a request with `elevate` (`perms.rs`, `files.rs`). Never as a silent fallback.
+- Every helper call is recorded in the audit log with an action name that starts with `helper.`.
+- Code that needs Linux gets `#[cfg(target_os = "linux")]`. Check it with `make test-linux`.
+
+## The audit log
+- A handler that changes something takes `Extension(actor): Extension<Actor>` and passes its result through `audited()` (`files_write.rs`), or calls `state.audit().record()`.
+- A line holds paths and names. Never a password, a session id or file content.
 
 ## Secrets
 - Compare secrets with a constant-time function. Password checks go through `rd_auth::verify_password`.

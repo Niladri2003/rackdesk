@@ -4,11 +4,15 @@
 //! here, so the integration tests in `tests/` can call the router without a
 //! network socket.
 
+pub mod audit;
 pub mod auth;
 pub mod csrf;
 pub mod error;
 pub mod files;
 pub mod files_write;
+pub mod helper;
+pub mod ids;
+pub mod perms;
 pub mod state;
 pub mod tls;
 mod ui;
@@ -45,6 +49,12 @@ pub fn router(state: AppState) -> Router {
         .route("/fs/places", get(files::places))
         .route("/fs/search", get(files::search))
         .route("/fs/download", get(files::download))
+        .route("/fs/zip", get(files::download_zip))
+        .route("/fs/compress", post(files_write::compress))
+        .route("/fs/properties", get(perms::properties))
+        .route("/fs/chmod", post(perms::chmod))
+        .route("/fs/chown", post(perms::chown))
+        .route("/fs/extract", post(files_write::extract))
         .route("/fs/mkdir", post(files_write::mkdir))
         .route("/fs/rename", post(files_write::rename))
         .route("/fs/copy", post(files_write::copy))

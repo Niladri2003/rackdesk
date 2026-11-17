@@ -162,6 +162,48 @@ pub struct UploadStatus {
     pub path: Option<String>,
 }
 
+/// An entry with its owner, for the properties dialog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct EntryDetails {
+    pub entry: DirEntry,
+    /// Numeric ids of the owner and the group (Unix only).
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
+    /// Their names, if the server knows them.
+    pub owner: Option<String>,
+    pub group: Option<String>,
+    /// True if this server has a helper for actions that need root. The UI
+    /// then offers to try a refused change again with `elevate`.
+    pub can_elevate: bool,
+}
+
+/// Body of `POST /api/v1/fs/chmod`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChmodRequest {
+    pub path: String,
+    /// The 9 plain permission bits, such as 0o644 (420 as a number).
+    pub mode: u32,
+    /// Do it through the root helper.
+    #[serde(default)]
+    pub elevate: bool,
+}
+
+/// Body of `POST /api/v1/fs/chown`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChownRequest {
+    pub path: String,
+    /// A user name or a numeric id. `None` leaves the owner as it is.
+    pub owner: Option<String>,
+    /// A group name or a numeric id. `None` leaves the group as it is.
+    pub group: Option<String>,
+    /// Do it through the root helper.
+    #[serde(default)]
+    pub elevate: bool,
+}
+
 /// A filesystem, with its use. Shown in the sidebar of the file browser.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

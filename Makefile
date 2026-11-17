@@ -1,7 +1,7 @@
 # RackDesk development commands. Run `make` or `make help` to list them.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run web build check fmt fmt-check clippy test web-check e2e deny new-password clean
+.PHONY: help setup run web build check fmt fmt-check clippy test web-check e2e test-linux deny new-password clean
 
 DATA_DIR ?= ./dev-data
 
@@ -43,6 +43,9 @@ e2e: ## Run the browser tests against a temporary server (downloads a test brows
 	cd web && npm run build
 	cargo build -p rackdeskd
 	cd web && npx playwright install chromium && npm run e2e
+
+test-linux: ## Lint and test the Linux-only code (the root helper) in a container. Needs Docker
+	./scripts/test-linux.sh
 
 deny: ## Check dependencies for advisories and licences (needs cargo-deny)
 	cargo deny check

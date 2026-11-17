@@ -22,7 +22,7 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 /// A name for a temporary file. It starts with a dot, so listings hide it.
 /// It is not a secret: files are created with `create_new`, which fails if
 /// the name exists.
-fn temp_name(purpose: &str) -> String {
+pub(crate) fn temp_name(purpose: &str) -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -61,7 +61,7 @@ fn free_name(dir: &Dir, name: &str) -> Result<String, FsError> {
         .ok_or(FsError::AlreadyExists)
 }
 
-fn remove_entry(dir: &Dir, name: &str) -> io::Result<()> {
+pub(crate) fn remove_entry(dir: &Dir, name: &str) -> io::Result<()> {
     // A symlink is removed as a link. Its target is never touched.
     if dir.symlink_metadata(name)?.is_dir() {
         dir.remove_dir_all(name)
@@ -95,7 +95,7 @@ impl Root {
     /// Applies the conflict rule to a target. Returns the target with the
     /// name to use. With `Replace`, what is there stays until the caller
     /// has the new content ready.
-    fn settle(&self, mut target: Place, conflict: Conflict) -> Result<Place, FsError> {
+    pub(crate) fn settle(&self, mut target: Place, conflict: Conflict) -> Result<Place, FsError> {
         if target.exists() {
             match conflict {
                 Conflict::Fail => return Err(FsError::AlreadyExists),
@@ -108,7 +108,7 @@ impl Root {
 
     /// Renames `temp` in the target folder to the target name. An existing
     /// folder is removed first: a rename can replace a file, not a folder.
-    fn put_in_place(target: &Place, temp: &str) -> Result<(), FsError> {
+    pub(crate) fn put_in_place(target: &Place, temp: &str) -> Result<(), FsError> {
         if let Ok(meta) = target.dir.symlink_metadata(&target.name) {
             if meta.is_dir() {
                 target.dir.remove_dir_all(&target.name)?;

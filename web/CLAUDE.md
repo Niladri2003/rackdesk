@@ -64,7 +64,7 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 - **An app gets `params`, not its window.** It never receives the position or size, so a move or resize does not redraw it. `Window`, `WindowBody` and `Rail` are wrapped in `memo`: keep their props stable (no inline objects or functions), or the redraw test in `e2e/desktop.spec.ts` fails.
 - **Tokens are the only source of visual values.** No colour, radius or duration is written in a component. Use the CSS variables.
 - **Text comes from `t`.** `import { t } from '../i18n'`, then `t.window.close`. Text with a value in it is a function in `en.ts`.
-- **Questions go through `shell/dialog.ts`.** `choose()` asks for 1 of a few answers and `askText()` for 1 line of text. Both return a promise. Don't use `window.confirm` or `window.prompt`.
+- **Questions go through `shell/dialog.ts`.** `choose()` asks for 1 of a few answers and `askText()` for 1 line of text. Both return a promise. `showPanel()` shows a dialog whose content the caller draws, as the Properties dialog does. Don't use `window.confirm` or `window.prompt`, and don't open a Radix dialog of your own: the shell makes the desktop behind its dialog inert.
 - **A change to files is announced.** After a write, call `folderChanged(dir)` from `apps/files/changes.ts`. Open file browser windows that show `dir` load it again. Nothing watches the server.
 - **Uploads go through `shell/transfers.ts`** (`startUploads`). It sends chunks, resumes, and shows the panel.
 - **A window with unsaved work sets a close check** with `setCloseGuard` from `AppProps`, as the editor does.

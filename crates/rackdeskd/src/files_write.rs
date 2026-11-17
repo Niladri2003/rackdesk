@@ -19,12 +19,13 @@
 //! `GET /fs/uploads/{id}` gives the position after a lost connection, and
 //! `DELETE` cancels and removes the temporary file.
 
+use crate::audit::Actor;
 use crate::error::ApiErr;
 use crate::files::blocking;
 use crate::state::AppState;
 use axum::body::Bytes;
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{Path, Query, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -32,7 +33,7 @@ use rd_api::{
     Conflict, PathRequest, PathResult, SaveResult, TransferRequest, TrashItem, TrashRequest,
     UploadRequest, UploadStatus,
 };
-use rd_fs::FsError;
+use rd_fs::{ArchiveLimits, FsError};
 use serde::Deserialize;
 use std::time::{Duration, Instant};
 
@@ -62,59 +63,87 @@ pub struct Upload {
 
 type Reply<T> = Result<Json<T>, ApiErr>;
 
+/// Adds the outcome of a change to the audit log, and passes it on.
+fn audited<T>(
+    state: &AppState,
+    actor: &Actor,
+    action: &str,
+    target: &str,
+    outcome: Result<T, ApiErr>,
+) -> Result<T, ApiErr> {
+    let result = outcome.as_ref().map(|_| ()).map_err(ApiErr::code);
+    state.audit().record(actor, action, target, result);
+    outcome
+}
+
 /// `POST /api/v1/fs/mkdir`
 pub async fn mkdir(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<PathRequest>, JsonRejection>,
 ) -> Result<StatusCode, ApiErr> {
     let Json(req) = body?;
-    blocking(&state, move |root| root.create_dir(&req.path)).await?;
+    let path = req.path.clone();
+    let done = blocking(&state, move |root| root.create_dir(&req.path)).await;
+    audited(&state, &actor, "fs.mkdir", &path, done)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/v1/fs/rename`. Also moves: `to` can be in another folder.
 pub async fn rename(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<TransferRequest>, JsonRejection>,
 ) -> Reply<PathResult> {
     let Json(req) = body?;
-    let path = blocking(&state, move |root| {
+    let target = format!("{} -> {}", req.from, req.to);
+    let done = blocking(&state, move |root| {
         root.rename(&req.from, &req.to, req.conflict)
     })
-    .await?;
+    .await;
+    let path = audited(&state, &actor, "fs.rename", &target, done)?;
     Ok(Json(PathResult { path }))
 }
 
 /// `POST /api/v1/fs/copy`
 pub async fn copy(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<TransferRequest>, JsonRejection>,
 ) -> Reply<PathResult> {
     let Json(req) = body?;
-    let path = blocking(&state, move |root| {
+    let target = format!("{} -> {}", req.from, req.to);
+    let done = blocking(&state, move |root| {
         root.copy(&req.from, &req.to, req.conflict)
     })
-    .await?;
+    .await;
+    let path = audited(&state, &actor, "fs.copy", &target, done)?;
     Ok(Json(PathResult { path }))
 }
 
 /// `POST /api/v1/fs/delete`. Deletes for good.
 pub async fn delete(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<PathRequest>, JsonRejection>,
 ) -> Result<StatusCode, ApiErr> {
     let Json(req) = body?;
-    blocking(&state, move |root| root.remove(&req.path)).await?;
+    let path = req.path.clone();
+    let done = blocking(&state, move |root| root.remove(&req.path)).await;
+    audited(&state, &actor, "fs.delete", &path, done)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/v1/fs/trash`. Moves an entry to the trash.
 pub async fn trash(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<PathRequest>, JsonRejection>,
 ) -> Result<StatusCode, ApiErr> {
     let Json(req) = body?;
-    blocking(&state, move |root| root.trash(&req.path)).await?;
+    let path = req.path.clone();
+    let done = blocking(&state, move |root| root.trash(&req.path)).await;
+    audited(&state, &actor, "fs.trash", &path, done)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -126,30 +155,73 @@ pub async fn trash_list(State(state): State<AppState>) -> Reply<Vec<TrashItem>> 
 /// `POST /api/v1/fs/trash/restore`
 pub async fn trash_restore(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<TrashRequest>, JsonRejection>,
 ) -> Reply<PathResult> {
     let Json(req) = body?;
-    let path = blocking(&state, move |root| {
+    let id = req.id.clone();
+    let done = blocking(&state, move |root| {
         root.trash_restore(&req.id, req.conflict)
     })
-    .await?;
+    .await;
+    let path = audited(&state, &actor, "fs.trash_restore", &id, done)?;
     Ok(Json(PathResult { path }))
 }
 
 /// `POST /api/v1/fs/trash/delete`. Deletes 1 item in the trash for good.
 pub async fn trash_delete(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<TrashRequest>, JsonRejection>,
 ) -> Result<StatusCode, ApiErr> {
     let Json(req) = body?;
-    blocking(&state, move |root| root.trash_delete(&req.id)).await?;
+    let id = req.id.clone();
+    let done = blocking(&state, move |root| root.trash_delete(&req.id)).await;
+    audited(&state, &actor, "fs.trash_delete", &id, done)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/v1/fs/trash/empty`
-pub async fn trash_empty(State(state): State<AppState>) -> Result<StatusCode, ApiErr> {
-    blocking(&state, |root| root.trash_empty()).await?;
+pub async fn trash_empty(
+    State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
+) -> Result<StatusCode, ApiErr> {
+    let done = blocking(&state, |root| root.trash_empty()).await;
+    audited(&state, &actor, "fs.trash_empty", "", done)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /api/v1/fs/compress`. Makes a zip file at `to` from `from`.
+pub async fn compress(
+    State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
+    body: Result<Json<TransferRequest>, JsonRejection>,
+) -> Reply<PathResult> {
+    let Json(req) = body?;
+    let target = format!("{} -> {}", req.from, req.to);
+    let done = blocking(&state, move |root| {
+        root.compress(&req.from, &req.to, req.conflict, &ArchiveLimits::default())
+    })
+    .await;
+    let path = audited(&state, &actor, "fs.compress", &target, done)?;
+    Ok(Json(PathResult { path }))
+}
+
+/// `POST /api/v1/fs/extract`. Extracts the zip file `from` into a new
+/// folder at `to`.
+pub async fn extract(
+    State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
+    body: Result<Json<TransferRequest>, JsonRejection>,
+) -> Reply<PathResult> {
+    let Json(req) = body?;
+    let target = format!("{} -> {}", req.from, req.to);
+    let done = blocking(&state, move |root| {
+        root.extract(&req.from, &req.to, req.conflict, &ArchiveLimits::default())
+    })
+    .await;
+    let path = audited(&state, &actor, "fs.extract", &target, done)?;
+    Ok(Json(PathResult { path }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,6 +240,7 @@ pub struct SaveQuery {
 /// `If-Match`, the file must not exist yet.
 pub async fn save(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     headers: HeaderMap,
     query: Result<Query<SaveQuery>, QueryRejection>,
     body: Bytes,
@@ -177,7 +250,8 @@ pub async fn save(
         .get(header::IF_MATCH)
         .and_then(|v| v.to_str().ok())
         .map(|v| v.trim().trim_matches('"').to_owned());
-    let version = blocking(&state, move |root| {
+    let path = q.path.clone();
+    let done = blocking(&state, move |root| {
         if q.force {
             return root.write_file(&q.path, &body, None);
         }
@@ -190,7 +264,8 @@ pub async fn save(
             },
         }
     })
-    .await?;
+    .await;
+    let version = audited(&state, &actor, "fs.save", &path, done)?;
     Ok(Json(SaveResult {
         etag: format!("\"{version}\""),
     }))
@@ -216,6 +291,7 @@ fn no_such_upload() -> ApiErr {
 /// `POST /api/v1/fs/uploads`
 pub async fn upload_begin(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     body: Result<Json<UploadRequest>, JsonRejection>,
 ) -> Reply<UploadStatus> {
     let Json(req) = body?;
@@ -286,15 +362,20 @@ pub async fn upload_begin(
     }
     // A file of 0 bytes has no chunk to send. It is complete now.
     if upload.size == 0 {
-        return finish(&state, &id, upload).await.map(Json);
+        return finish(&state, &actor, &id, upload).await.map(Json);
     }
     Ok(Json(upload_status(&id, &upload, 0, None)))
 }
 
-async fn finish(state: &AppState, id: &str, upload: Upload) -> Result<UploadStatus, ApiErr> {
+async fn finish(
+    state: &AppState,
+    actor: &Actor,
+    id: &str,
+    upload: Upload,
+) -> Result<UploadStatus, ApiErr> {
     state.remove_upload(id);
     let done = upload.clone();
-    let path = blocking(state, move |root| {
+    let finished = blocking(state, move |root| {
         let finished =
             root.upload_finish(&done.dir, &done.temp, &done.name, done.size, done.conflict);
         if finished.is_err() {
@@ -302,7 +383,10 @@ async fn finish(state: &AppState, id: &str, upload: Upload) -> Result<UploadStat
         }
         finished
     })
-    .await?;
+    .await;
+    // An upload is recorded once, when the file is complete.
+    let target = format!("{}/{}", upload.dir.trim_end_matches('/'), upload.name);
+    let path = audited(state, actor, "fs.upload", &target, finished)?;
     Ok(upload_status(id, &upload, upload.size, Some(path)))
 }
 
@@ -314,6 +398,7 @@ pub struct ChunkQuery {
 /// `PATCH /api/v1/fs/uploads/{id}`
 pub async fn upload_chunk(
     State(state): State<AppState>,
+    Extension(actor): Extension<Actor>,
     Path(id): Path<String>,
     query: Result<Query<ChunkQuery>, QueryRejection>,
     body: Bytes,
@@ -341,7 +426,7 @@ pub async fn upload_chunk(
         Err(e) => return Err(e),
     };
     let status = if offset == upload.size {
-        finish(&state, &id, upload).await?
+        finish(&state, &actor, &id, upload).await?
     } else {
         upload_status(&id, &upload, offset, None)
     };

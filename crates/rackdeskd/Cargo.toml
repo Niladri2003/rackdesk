@@ -11,6 +11,7 @@ publish.workspace = true
 rd-api.workspace = true
 rd-fs.workspace = true
 rd-auth.workspace = true
+rd-helper-proto.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
@@ -23,6 +24,7 @@ tracing-subscriber.workspace = true
 rust-embed.workspace = true
 mime_guess.workspace = true
 tokio-util.workspace = true
+rustix.workspace = true
 axum-server.workspace = true
 rcgen.workspace = true
 rustls-pki-types.workspace = true
@@ -30,6 +32,8 @@ sha2.workspace = true
 time.workspace = true
 
 [dev-dependencies]
+rackdesk-helper = { path = "../rackdesk-helper" }
+zip.workspace = true
 tempfile.workspace = true
 tower.workspace = true
 http-body-util.workspace = true

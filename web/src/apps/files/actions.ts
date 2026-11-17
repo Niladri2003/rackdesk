@@ -137,6 +137,32 @@ export async function duplicateEntry(dir: string, name: string): Promise<void> {
   }
 }
 
+/** Makes "name.zip" next to the entry. */
+export async function compressEntry(dir: string, name: string): Promise<void> {
+  const path = joinPath(dir, name)
+  notify('info', f.working(name))
+  try {
+    const done = await api.fs.compress(path, `${path}.zip`)
+    folderChanged(dir)
+    notify('success', f.compressed(done.path))
+  } catch (e) {
+    failed(e)
+  }
+}
+
+/** Extracts "name.zip" into a new folder "name" next to it. */
+export async function extractEntry(dir: string, name: string): Promise<void> {
+  const path = joinPath(dir, name)
+  notify('info', f.working(name))
+  try {
+    const done = await api.fs.extract(path, path.replace(/\.zip$/i, ''))
+    folderChanged(dir)
+    notify('success', f.extracted(done.path))
+  } catch (e) {
+    failed(e)
+  }
+}
+
 /** Puts the cut or copied entry into `dir`. */
 export async function pasteInto(dir: string): Promise<void> {
   const clip = clipStore.get()
