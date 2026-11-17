@@ -1,10 +1,11 @@
 // The taskbar: a vertical rail on the left edge with the search button, the
 // apps, notifications, the clock and the account menu.
-import { Bell, CircleDot, LogOut, Settings as SettingsIcon } from 'lucide-react'
+import { Bell, LogOut, Settings as SettingsIcon } from 'lucide-react'
 import { DropdownMenu, Popover } from 'radix-ui'
 import { memo, useEffect, useState } from 'react'
 import { APPS, RAIL_APPS } from '../apps/registry'
 import { t } from '../i18n'
+import { LogoMark } from '../ui/Logo'
 import { countRender } from '../lib/renderCount'
 import { useShell } from './context'
 import { MOD_KEY, NOTICE_ICON } from './icons'
@@ -50,7 +51,7 @@ export const Rail = memo(function Rail({ states, windows, onWindow, onLauncher, 
         title={t.rail.launcherHint(MOD_KEY)}
         onClick={onLauncher}
       >
-        <CircleDot size={19} aria-hidden="true" />
+        <LogoMark size={24} />
       </button>
 
       {RAIL_APPS.map((id) => {

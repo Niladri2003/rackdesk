@@ -28,6 +28,11 @@ impl ApiErr {
         }
     }
 
+    /// The stable code that the UI matches on.
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+
     pub fn unauthorized() -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "unauthorized", "Sign in first.")
     }

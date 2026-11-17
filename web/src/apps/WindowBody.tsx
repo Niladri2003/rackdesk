@@ -6,12 +6,12 @@ import type { AppProps } from './registry'
 
 /** Memoised: it draws again only when the app's own data changes, not when
  * its window moves, resizes or changes focus. */
-export const WindowBody = memo(function WindowBody({ app, params, setParams }: AppProps) {
+export const WindowBody = memo(function WindowBody({ app, params, setParams, setCloseGuard }: AppProps) {
   countRender(`body:${app.id}`)
   const { content } = app
   if (content.kind === 'builtin') {
     const Component = content.component
-    return <Component app={app} params={params} setParams={setParams} />
+    return <Component app={app} params={params} setParams={setParams} setCloseGuard={setCloseGuard} />
   }
   return (
     <div className="empty-state">

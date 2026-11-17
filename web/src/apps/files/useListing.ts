@@ -69,6 +69,9 @@ export function useListing(query: ListingQuery): Listing {
   useEffect(() => {
     current.current = { key, query: JSON.parse(key) as ListingQuery }
     requested.current = new Set()
+    // A path that starts with ":" is a special view, such as the trash. It
+    // has no folder listing.
+    if (current.current.query.path.startsWith(':')) return
     const abort = new AbortController()
     load(0, abort.signal)
     return () => abort.abort()

@@ -1,19 +1,24 @@
 // The file browser. It reads folders through /api/v1/fs and never changes
 // anything on the server.
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, CircleAlert, Download, Eye, EyeOff, FolderOpen, LayoutGrid, List, Pencil, Search, Star } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, CircleAlert, ClipboardPaste, Copy, CopyPlus, Download, Eye, EyeOff, FilePlus, FolderOpen, FolderPlus, LayoutGrid, List, Pencil, Scissors, Search, Star, TextCursorInput, Trash2, Upload } from 'lucide-react'
+import { ContextMenu } from 'radix-ui'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { DragEvent, KeyboardEvent } from 'react'
 import { api, ApiFailure, fileUrl } from '../../api/client'
 import type { DirEntry } from '../../api/generated/DirEntry'
 import type { Places } from '../../api/generated/Places'
 import type { SortKey } from '../../api/generated/SortKey'
 import { errorText, t } from '../../i18n'
 import { useShell } from '../../shell/context'
+import { startUploads } from '../../shell/transfers'
 import type { AppProps } from '../registry'
+import { duplicateEntry, newFile, newFolder, pasteInto, renameEntry, setClip, trashEntry, useClip } from './actions'
+import { TRASH, useFolderChanges } from './changes'
 import { useFavourites } from './favourites'
 import { kindOf } from './kinds'
 import { baseName, crumbs, formatSize, formatTime, joinPath, normalisePath, parentPath } from './paths'
 import { Sidebar } from './Sidebar'
+import { TrashView } from './TrashView'
 import { useListing } from './useListing'
 import { useRowWindow } from './useRowWindow'
 
@@ -23,6 +28,9 @@ const TILE_HEIGHT = 104
 /** Space around the tiles of the grid view. */
 const GRID_PAD = 8
 const SORTS: SortKey[] = ['name', 'size', 'modified']
+/** A text file up to this size opens in the editor. A larger one opens in
+ * the preview, which reads only its start. */
+const MAX_EDIT_BYTES = 2 * 1024 * 1024
 const f = t.files
 
 /** Starts a download of a file through the browser. */
@@ -39,6 +47,9 @@ export function Files({ params, setParams }: AppProps) {
   const id = useId()
   const [places, setPlaces] = useState<Places | null>(null)
   const favourites = useFavourites(shell.session.username)
+  const clip = useClip()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [dropping, setDropping] = useState(false)
 
   // What the window shows. These survive a reload, through `params`.
   const path = params.path
@@ -87,10 +98,13 @@ export function Files({ params, setParams }: AppProps) {
   useEffect(() => {
     if (error instanceof ApiFailure && error.code === 'unauthorized') sessionEnded()
   }, [error, sessionEnded])
+  // Load the folder again after an upload, a rename or a delete in it.
+  useFolderChanges(path, listing.reload)
 
   const go = useCallback(
     (target: string, mode: 'push' | 'history' = 'push') => {
-      const next = normalisePath(target)
+      // The trash is a special view, not a path on the server.
+      const next = target === TRASH ? TRASH : normalisePath(target)
       setFilterText('')
       setFilter('')
       setSelected(-1)
@@ -135,6 +149,7 @@ export function Files({ params, setParams }: AppProps) {
       const full = joinPath(path, entry.name)
       const kind = kindOf(entry)
       if (kind.open === 'folder') go(full)
+      else if (kind.open === 'text' && entry.size <= MAX_EDIT_BYTES) shell.openApp('editor', { path: full })
       else if (kind.open !== 'none') shell.openApp('preview', { path: full })
       else if (entry.kind === 'file' || entry.target === 'file') download(full)
     },
@@ -171,7 +186,25 @@ export function Files({ params, setParams }: AppProps) {
   }
 
   const onListKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return
+    if (!path || e.altKey) return
+    const entry = listing.entry(selected)
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'v') void pasteInto(path)
+      else if (!entry) return
+      else if (key === 'c') setClip('copy', joinPath(path, entry.name))
+      else if (key === 'x') setClip('cut', joinPath(path, entry.name))
+      else if (key === 'd') void duplicateEntry(path, entry.name)
+      else return
+      e.preventDefault()
+      return
+    }
+    if (entry && (e.key === 'F2' || e.key === 'Delete')) {
+      e.preventDefault()
+      if (e.key === 'F2') void renameEntry(path, entry.name)
+      else void trashEntry(path, entry.name)
+      return
+    }
     const step: Record<string, number> = { ArrowDown: columns, ArrowUp: -columns, ArrowRight: view === 'grid' ? 1 : 0, ArrowLeft: view === 'grid' ? -1 : 0 }
     if (step[e.key]) {
       e.preventDefault()
@@ -183,7 +216,6 @@ export function Files({ params, setParams }: AppProps) {
       e.preventDefault()
       select(listing.total - 1)
     } else if (e.key === 'Enter') {
-      const entry = listing.entry(selected)
       if (entry) {
         e.preventDefault()
         open(entry)
@@ -206,9 +238,28 @@ export function Files({ params, setParams }: AppProps) {
   // The scroll area is a list box only while it holds rows. An empty or
   // failed folder shows a message, which is not a list.
   const hasRows = !listing.error && !listing.loading && listing.total > 0
-  const selectedEntry = selected >= 0 ? listing.entry(selected) : undefined
+  const inTrash = path === TRASH
+  const openInEditor = (file: string) => shell.openApp('editor', { path: file })
+  const selectedEntry = selected >= 0 && !inTrash ? listing.entry(selected) : undefined
   const selectedKind = selectedEntry ? kindOf(selectedEntry) : undefined
   const isFavourite = favourites.list.includes(path)
+  const selectedPath = selectedEntry ? joinPath(path, selectedEntry.name) : ''
+  const selectedIsFile = selectedEntry ? selectedEntry.kind === 'file' || selectedEntry.target === 'file' : false
+
+  // Files dragged in from the user's computer are uploaded to this folder.
+  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files')
+  const onDragOver = (e: DragEvent) => {
+    if (inTrash || !hasFiles(e)) return
+    e.preventDefault()
+    setDropping(true)
+  }
+  const onDrop = (e: DragEvent) => {
+    if (inTrash || !hasFiles(e)) return
+    e.preventDefault()
+    setDropping(false)
+    // A dropped folder has no type and no size. Folder upload is not built.
+    startUploads([...e.dataTransfer.files].filter((file) => file.type !== '' || file.size > 0), path)
+  }
   const setSort = (key: SortKey) => setParams(key === sort ? { desc: desc ? '0' : '1' } : { sort: key, desc: '0' })
   const optionId = (index: number) => `${id}-row-${index}`
   const sortButton = (key: SortKey, label: string) => (
@@ -233,7 +284,7 @@ export function Files({ params, setParams }: AppProps) {
         <button type="button" className="icon-btn" aria-label={f.forward} title={f.forward} disabled={!canForward} onClick={forward}>
           <ArrowRight size={16} aria-hidden="true" />
         </button>
-        <button type="button" className="icon-btn" aria-label={f.up} title={f.up} disabled={path === '/'} onClick={() => go(parentPath(path))}>
+        <button type="button" className="icon-btn" aria-label={f.up} title={f.up} disabled={path === '/' || inTrash} onClick={() => go(parentPath(path))}>
           <ArrowUp size={16} aria-hidden="true" />
         </button>
 
@@ -265,7 +316,15 @@ export function Files({ params, setParams }: AppProps) {
                   /
                 </button>
               </li>
-              {crumbs(path).map((c) => (
+              {inTrash && (
+                <li>
+                  <ChevronRight size={13} aria-hidden="true" />
+                  <span className="crumb" aria-current="page">
+                    {f.trash}
+                  </span>
+                </li>
+              )}
+              {(inTrash ? [] : crumbs(path)).map((c) => (
                 <li key={c.path}>
                   <ChevronRight size={13} aria-hidden="true" />
                   <button type="button" className="crumb mono" aria-current={c.path === path ? 'page' : undefined} onClick={() => go(c.path)}>
@@ -280,6 +339,27 @@ export function Files({ params, setParams }: AppProps) {
           </nav>
         )}
 
+        <button type="button" className="icon-btn" aria-label={f.newFolder} title={f.newFolder} disabled={inTrash} onClick={() => void newFolder(path)}>
+          <FolderPlus size={16} aria-hidden="true" />
+        </button>
+        <button type="button" className="icon-btn" aria-label={f.newFile} title={f.newFile} disabled={inTrash} onClick={() => void newFile(path, openInEditor)}>
+          <FilePlus size={16} aria-hidden="true" />
+        </button>
+        <button type="button" className="icon-btn" aria-label={f.upload} title={f.upload} disabled={inTrash} onClick={() => fileInput.current?.click()}>
+          <Upload size={16} aria-hidden="true" />
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          aria-label={f.upload}
+          onChange={(e) => {
+            startUploads([...(e.target.files ?? [])], path)
+            // Clear it, so the same file can be chosen again.
+            e.target.value = ''
+          }}
+        />
         <label className="files-filter">
           <Search size={14} aria-hidden="true" />
           <input
@@ -326,12 +406,24 @@ export function Files({ params, setParams }: AppProps) {
 
       <div className="files-body">
         <Sidebar path={path} places={places} favourites={favourites.list} onGo={go} />
-        <div className="files-main">
+        <div className="files-main" onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
+          {dropping && (
+            <div className="files-drop" aria-hidden="true">
+              <Upload size={20} />
+              {f.dropHere(baseName(path))}
+            </div>
+          )}
+          {inTrash ? (
+            <TrashView />
+          ) : (
+            <>
           <div className="files-head" data-view={view}>
             {sortButton('name', f.colName)}
             {sortButton('size', f.colSize)}
             {sortButton('modified', f.colModified)}
           </div>
+          <ContextMenu.Root modal={false}>
+          <ContextMenu.Trigger asChild>
           <div
             ref={setScrollEl}
             className="files-scroll"
@@ -342,6 +434,10 @@ export function Files({ params, setParams }: AppProps) {
             aria-activedescendant={hasRows && selectedEntry ? optionId(selected) : undefined}
             data-view={view}
             onKeyDown={onListKey}
+            onContextMenu={(e) => {
+              // A right click on empty space is about the folder.
+              if (!(e.target as HTMLElement).closest('.files-row')) setSelected(-1)
+            }}
           >
             {listing.error ? (
               <div className="empty-state" role="alert">
@@ -398,6 +494,7 @@ export function Files({ params, setParams }: AppProps) {
                       aria-posinset={index + 1}
                       style={style}
                       onClick={() => setSelected(index)}
+                      onContextMenu={() => setSelected(index)}
                       onDoubleClick={() => open(entry)}
                     >
                       <Icon size={view === 'grid' ? 36 : 16} style={{ color: kind.tint }} aria-hidden="true" />
@@ -421,6 +518,72 @@ export function Files({ params, setParams }: AppProps) {
               </div>
             )}
           </div>
+          </ContextMenu.Trigger>
+          <ContextMenu.Portal>
+            <ContextMenu.Content className="panel menu" aria-label={f.actions}>
+              {selectedEntry && selectedKind && (
+                <>
+                  {(selectedKind.open !== 'none' || selectedEntry.kind === 'dir') && (
+                    <ContextMenu.Item className="menu-item" onSelect={() => open(selectedEntry)}>
+                      <FolderOpen size={15} aria-hidden="true" />
+                      {f.open}
+                    </ContextMenu.Item>
+                  )}
+                  {selectedIsFile && (
+                    <ContextMenu.Item className="menu-item" onSelect={() => download(selectedPath)}>
+                      <Download size={15} aria-hidden="true" />
+                      {f.download}
+                    </ContextMenu.Item>
+                  )}
+                  <ContextMenu.Separator className="menu-separator" />
+                  <ContextMenu.Item className="menu-item" onSelect={() => setClip('cut', selectedPath)}>
+                    <Scissors size={15} aria-hidden="true" />
+                    {f.cut}
+                    <span className="menu-kbd">Ctrl+X</span>
+                  </ContextMenu.Item>
+                  <ContextMenu.Item className="menu-item" onSelect={() => setClip('copy', selectedPath)}>
+                    <Copy size={15} aria-hidden="true" />
+                    {f.copy}
+                    <span className="menu-kbd">Ctrl+C</span>
+                  </ContextMenu.Item>
+                  <ContextMenu.Item className="menu-item" onSelect={() => void duplicateEntry(path, selectedEntry.name)}>
+                    <CopyPlus size={15} aria-hidden="true" />
+                    {f.duplicate}
+                    <span className="menu-kbd">Ctrl+D</span>
+                  </ContextMenu.Item>
+                  <ContextMenu.Item className="menu-item" onSelect={() => void renameEntry(path, selectedEntry.name)}>
+                    <TextCursorInput size={15} aria-hidden="true" />
+                    {f.rename}
+                    <span className="menu-kbd">F2</span>
+                  </ContextMenu.Item>
+                  <ContextMenu.Item className="menu-item danger" onSelect={() => void trashEntry(path, selectedEntry.name)}>
+                    <Trash2 size={15} aria-hidden="true" />
+                    {f.moveToTrash}
+                    <span className="menu-kbd">Del</span>
+                  </ContextMenu.Item>
+                  <ContextMenu.Separator className="menu-separator" />
+                </>
+              )}
+              <ContextMenu.Item className="menu-item" disabled={!clip} onSelect={() => void pasteInto(path)}>
+                <ClipboardPaste size={15} aria-hidden="true" />
+                {f.paste}
+                <span className="menu-kbd">Ctrl+V</span>
+              </ContextMenu.Item>
+              <ContextMenu.Item className="menu-item" onSelect={() => void newFolder(path)}>
+                <FolderPlus size={15} aria-hidden="true" />
+                {f.newFolder}
+              </ContextMenu.Item>
+              <ContextMenu.Item className="menu-item" onSelect={() => void newFile(path, openInEditor)}>
+                <FilePlus size={15} aria-hidden="true" />
+                {f.newFile}
+              </ContextMenu.Item>
+              <ContextMenu.Item className="menu-item" onSelect={() => fileInput.current?.click()}>
+                <Upload size={15} aria-hidden="true" />
+                {f.upload}
+              </ContextMenu.Item>
+            </ContextMenu.Content>
+          </ContextMenu.Portal>
+          </ContextMenu.Root>
           <div className="files-foot">
             {selectedEntry && selectedKind ? (
               <>
@@ -435,17 +598,31 @@ export function Files({ params, setParams }: AppProps) {
                     {f.open}
                   </button>
                 )}
-                {(selectedEntry.kind === 'file' || selectedEntry.target === 'file') && (
-                  <button type="button" className="btn btn-small" onClick={() => download(joinPath(path, selectedEntry.name))}>
+                {selectedIsFile && (
+                  <button type="button" className="btn btn-small" onClick={() => download(selectedPath)}>
                     <Download size={14} aria-hidden="true" />
                     {f.download}
                   </button>
                 )}
+                <button type="button" className="btn btn-small" onClick={() => void renameEntry(path, selectedEntry.name)}>
+                  {f.rename}
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn danger"
+                  aria-label={f.moveToTrash}
+                  title={f.moveToTrash}
+                  onClick={() => void trashEntry(path, selectedEntry.name)}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </button>
               </>
             ) : (
               <span role="status">{listing.loading || listing.error ? '' : filter ? f.itemsMatching(listing.total) : f.items(listing.total)}</span>
             )}
           </div>
+            </>
+          )}
         </div>
       </div>
     </div>

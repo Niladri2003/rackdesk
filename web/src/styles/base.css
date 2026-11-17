@@ -151,6 +151,14 @@ p {
 .btn-primary:active {
   background: color-mix(in oklch, var(--acc) 78%, var(--text));
 }
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+.btn-danger:hover {
+  background: var(--danger-soft);
+}
 .btn-large {
   height: 38px;
   border-radius: var(--radius-md);
@@ -233,6 +241,21 @@ p {
 .alert svg {
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+/* The logo tile with the name. "Rack" is bold and "Desk" is regular. */
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.lockup svg {
+  flex-shrink: 0;
+}
+.lockup b {
+  font-weight: 600;
 }
 
 .kbd {

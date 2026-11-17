@@ -8,13 +8,14 @@ pub mod auth;
 pub mod csrf;
 pub mod error;
 pub mod files;
+pub mod files_write;
 pub mod state;
 pub mod tls;
 mod ui;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue};
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post, put};
 use axum::{middleware, Json, Router};
 use rd_api::ServerInfo;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -44,6 +45,31 @@ pub fn router(state: AppState) -> Router {
         .route("/fs/places", get(files::places))
         .route("/fs/search", get(files::search))
         .route("/fs/download", get(files::download))
+        .route("/fs/mkdir", post(files_write::mkdir))
+        .route("/fs/rename", post(files_write::rename))
+        .route("/fs/copy", post(files_write::copy))
+        .route("/fs/delete", post(files_write::delete))
+        .route(
+            "/fs/trash",
+            get(files_write::trash_list).post(files_write::trash),
+        )
+        .route("/fs/trash/restore", post(files_write::trash_restore))
+        .route("/fs/trash/delete", post(files_write::trash_delete))
+        .route("/fs/trash/empty", post(files_write::trash_empty))
+        .route("/fs/uploads", post(files_write::upload_begin))
+        // These 2 routes take file content, so they have larger body limits
+        // than the rest of the API.
+        .route(
+            "/fs/file",
+            put(files_write::save).layer(DefaultBodyLimit::max(files_write::MAX_SAVE_BYTES)),
+        )
+        .route(
+            "/fs/uploads/{id}",
+            patch(files_write::upload_chunk)
+                .layer(DefaultBodyLimit::max(files_write::MAX_CHUNK_BYTES))
+                .get(files_write::upload_get)
+                .delete(files_write::upload_cancel),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_active_session,

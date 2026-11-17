@@ -139,15 +139,7 @@ impl SessionStore {
 }
 
 fn random_id() -> Result<String, AuthError> {
-    let mut bytes = [0u8; ID_HEX_LEN / 2];
-    getrandom::fill(&mut bytes).map_err(|e| AuthError::Random(e.to_string()))?;
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(ID_HEX_LEN);
-    for b in bytes {
-        out.push(HEX[(b >> 4) as usize] as char);
-        out.push(HEX[(b & 0x0f) as usize] as char);
-    }
-    Ok(out)
+    crate::random_hex(ID_HEX_LEN / 2)
 }
 
 #[cfg(test)]

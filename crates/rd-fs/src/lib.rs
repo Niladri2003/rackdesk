@@ -10,6 +10,8 @@
 //! backslashes, `..` components), so errors are clear and logs are readable.
 
 mod search;
+mod trash;
+mod write;
 
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
@@ -18,6 +20,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 pub use search::SearchLimits;
+pub use write::MAX_COPY_ENTRIES;
 
 /// Hard cap on one page of a listing. The UI pages through big folders.
 pub const MAX_PAGE: u32 = 5_000;
@@ -34,6 +37,18 @@ pub enum FsError {
     NotADirectory,
     #[error("not a regular file")]
     NotAFile,
+    #[error("the name is already in use")]
+    AlreadyExists,
+    #[error("the file was changed by someone else")]
+    ChangedOnDisk,
+    #[error("the target is on another disk")]
+    CrossDevice,
+    #[error("too many entries")]
+    TooMany,
+    /// An upload chunk does not start where the file ends. Holds the size
+    /// the file has now.
+    #[error("the chunk does not start at the end of the file")]
+    OffsetMismatch(u64),
     #[error("io error: {0}")]
     Io(io::Error),
 }
@@ -47,6 +62,11 @@ impl FsError {
             FsError::PermissionDenied => "permission_denied",
             FsError::NotADirectory => "not_a_directory",
             FsError::NotAFile => "not_a_file",
+            FsError::AlreadyExists => "already_exists",
+            FsError::ChangedOnDisk => "changed_on_disk",
+            FsError::CrossDevice => "cross_device",
+            FsError::TooMany => "too_many",
+            FsError::OffsetMismatch(_) => "offset_mismatch",
             FsError::Io(_) => "io_error",
         }
     }
@@ -58,6 +78,8 @@ impl From<io::Error> for FsError {
             io::ErrorKind::NotFound => FsError::NotFound,
             io::ErrorKind::PermissionDenied => FsError::PermissionDenied,
             io::ErrorKind::NotADirectory => FsError::NotADirectory,
+            io::ErrorKind::AlreadyExists => FsError::AlreadyExists,
+            io::ErrorKind::CrossesDevices => FsError::CrossDevice,
             _ => FsError::Io(e),
         }
     }
@@ -122,6 +144,10 @@ pub struct OpenFile {
     pub len: u64,
     /// Unix seconds.
     pub modified: Option<i64>,
+    /// Changes when the size or the modified time of the file changes. Used
+    /// as the HTTP `ETag`, and to see that a file was not changed between a
+    /// read and a save.
+    pub version: String,
 }
 
 /// One entry while a listing is sorted. `meta` is read only when the sort
@@ -135,12 +161,17 @@ struct Listed {
 /// The directory tree the UI is allowed to see.
 pub struct Root {
     dir: Dir,
+    /// The trash folder, as a path beneath the root.
+    trash: PathBuf,
 }
 
 impl Root {
     pub fn open(path: &Path) -> Result<Self, FsError> {
         let dir = Dir::open_ambient_dir(path, ambient_authority())?;
-        Ok(Self { dir })
+        Ok(Self {
+            dir,
+            trash: trash::default_dir(),
+        })
     }
 
     /// Lists one page of a folder. Folders come first, then the sort order
@@ -270,6 +301,7 @@ impl Root {
         Ok(OpenFile {
             len: meta.len(),
             modified: modified_secs(&meta),
+            version: version_of(&meta),
             file: file.into_std(),
         })
     }
@@ -305,6 +337,18 @@ fn kind_of(ft: cap_std::fs::FileType) -> EntryKind {
     } else {
         EntryKind::Other
     }
+}
+
+/// A short text that identifies one version of a file: its size and its
+/// modified time, to the nanosecond.
+fn version_of(meta: &cap_std::fs::Metadata) -> String {
+    let (secs, nanos) = meta
+        .modified()
+        .ok()
+        .map(|t| t.into_std())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or((0, 0), |d| (d.as_secs(), d.subsec_nanos()));
+    format!("{:x}-{secs:x}-{nanos:x}", meta.len())
 }
 
 fn modified_secs(meta: &cap_std::fs::Metadata) -> Option<i64> {

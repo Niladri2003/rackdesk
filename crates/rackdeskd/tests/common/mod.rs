@@ -44,6 +44,9 @@ pub async fn server_with(https: bool, behind_proxy: bool) -> Server {
     let config = Config {
         data_dir: dir.path().to_owned(),
         files_root: files_root.clone(),
+        // Larger than any disk, so a test can ask for more than the free
+        // space without reaching this limit first.
+        max_upload_bytes: u64::MAX / 4,
         https,
         behind_proxy,
     };

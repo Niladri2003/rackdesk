@@ -2,7 +2,7 @@
 
 Read the root `CLAUDE.md` first. This file covers the React app in `web/`.
 
-**Status:** the desktop shell, Settings, the file browser (read only) and the file preview are built. Terminal is a placeholder window. The look follows the accepted design ("Shelf" direction: a rail on the left edge).
+**Status:** the desktop shell, Settings, the file browser (read and write), the file preview and the text editor are built. Terminal is a placeholder window. The look follows the accepted design ("Shelf" direction: a rail on the left edge).
 
 ## Commands
 ```sh
@@ -14,9 +14,9 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 `make e2e` from the repo root builds both and runs the tests. Run it after any UI change.
 
 ## Stack
-- **Installed:** React 19, TypeScript, Vite, oxlint, Radix UI (`radix-ui`), Lucide icons (`lucide-react`), TanStack Virtual (`@tanstack/react-virtual`). Tests: Playwright, `@axe-core/playwright`.
+- **Installed:** React 19, TypeScript, Vite, oxlint, Radix UI (`radix-ui`), Lucide icons (`lucide-react`), TanStack Virtual (`@tanstack/react-virtual`), CodeMirror 6 (loaded on demand, in `apps/editor/codemirror.ts`). Tests: Playwright, `@axe-core/playwright`.
 - **Not used, on purpose:** Tailwind CSS and Motion. Styles are plain CSS with tokens, and animations are CSS transitions (ADR 0005).
-- **Planned for later apps:** xterm.js (terminal), CodeMirror (editor), dnd-kit (drag and drop).
+- **Planned for later apps:** xterm.js (terminal), dnd-kit (drag and drop).
 - Check with the user before adding anything outside this list.
 
 ## Where things are
@@ -24,6 +24,7 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 |---|---|
 | `src/i18n/en.ts` | Every text the UI shows. No component holds text of its own |
 | `src/theme/tokens.ts` | Colour tokens for light and dark, per accent and wallpaper |
+| `src/ui/Logo.tsx` | The logo as components: `LogoMark`, `LogoTile`, `Lockup`. The source files are in `assets/logo/` |
 | `src/styles/*.css` | All styles. `base.css` has the shared controls (`.btn`, `.input`, `.icon-btn`) |
 | `src/shell/wm.ts` | The window manager: a pure reducer, with no DOM |
 | `src/shell/` | Desktop, Window, Rail (taskbar), Launcher (search), Switcher, toasts, connection banner |
@@ -63,6 +64,11 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 - **An app gets `params`, not its window.** It never receives the position or size, so a move or resize does not redraw it. `Window`, `WindowBody` and `Rail` are wrapped in `memo`: keep their props stable (no inline objects or functions), or the redraw test in `e2e/desktop.spec.ts` fails.
 - **Tokens are the only source of visual values.** No colour, radius or duration is written in a component. Use the CSS variables.
 - **Text comes from `t`.** `import { t } from '../i18n'`, then `t.window.close`. Text with a value in it is a function in `en.ts`.
+- **Questions go through `shell/dialog.ts`.** `choose()` asks for 1 of a few answers and `askText()` for 1 line of text. Both return a promise. Don't use `window.confirm` or `window.prompt`.
+- **A change to files is announced.** After a write, call `folderChanged(dir)` from `apps/files/changes.ts`. Open file browser windows that show `dir` load it again. Nothing watches the server.
+- **Uploads go through `shell/transfers.ts`** (`startUploads`). It sends chunks, resumes, and shows the panel.
+- **A window with unsaved work sets a close check** with `setCloseGuard` from `AppProps`, as the editor does.
+- **Two files must not differ only in letter case** (`transfers.ts` and `Transfers.tsx`). macOS treats them as 1 file.
 - **Nothing polls in the background.** Live data is requested only while the window showing it is open, and stops when it closes.
 - **A file that exports a component exports nothing else.** Constants and helpers go in a `.ts` file next to it. The linter checks this.
 

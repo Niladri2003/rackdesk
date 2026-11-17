@@ -4,7 +4,7 @@ A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with
 
 **Goal:** the server tool people most want to install: useful in the first 5 minutes, a replacement for SSH in daily work, safe, light, and open source. The 5 product goals are at the top of `docs/ROADMAP.md`. Check every feature against them.
 
-**Status:** M0 (skeleton), M1 (sign-in and sessions), M2 (desktop shell) and M3 (file browser, read) are done. M4 (file browser, write) is next. `docs/ROADMAP.md` is the source of truth for what to build and in what order. Don't build ahead of the current milestone.
+**Status:** M0 (skeleton), M1 (sign-in and sessions), M2 (desktop shell), M3 (file browser, read) and M4 (file browser, write) are done. M5 (privilege split) is next. `docs/ROADMAP.md` is the source of truth for what to build and in what order. Don't build ahead of the current milestone.
 
 ## Important rules for every change
 **Important 1:** The hyphen (-) is the only dash. No em-dash, no en-dash, anywhere in any file, including numeric ranges (write 1-20) and empty-cell placeholders in tables. Do not use other AI-like words, phrases or symbols. Do not use emoji in codebase, may use in documentation only if very apt. Use simple short phrases; convey technical meaning only; use simple english language but without removing any technical term or meaning; remove filler words; avoid nominalizations; write one idea per sentence; skip throat-clearing openers; use concrete terms; remove redundant qualifiers; use digits for numbers. No metaphor or personification in technical statements; state the behavior literally: write "a partial report is scored and enters the benchmark", never "a partial is a full citizen".
@@ -27,6 +27,7 @@ A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with
 | `crates/rd-auth` | Accounts, argon2id, credential store, sessions, limit on password guessing |
 | `crates/rackdeskd` | The server: axum routes, sign-in, CSRF check, HTTPS, security headers, embedded UI |
 | `web/` | React + TypeScript + Vite UI |
+| `assets/logo/` | The logo files (SVG and PNG) and their rules |
 | `docs/` | Roadmap, architecture, security plan, ADRs, design brief, journals |
 
 More specific guides: `crates/CLAUDE.md` (Rust) and `web/CLAUDE.md` (UI).

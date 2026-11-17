@@ -6,10 +6,15 @@
 import type { ApiError } from './generated/ApiError'
 import type { DirEntry } from './generated/DirEntry'
 import type { DirListing } from './generated/DirListing'
+import type { PathResult } from './generated/PathResult'
 import type { Places } from './generated/Places'
+import type { SaveResult } from './generated/SaveResult'
 import type { SearchResults } from './generated/SearchResults'
 import type { SortKey } from './generated/SortKey'
+import type { TrashItem } from './generated/TrashItem'
+import type { UploadStatus } from './generated/UploadStatus'
 import type { ChangePasswordRequest } from './generated/ChangePasswordRequest'
+import type { Conflict } from './generated/Conflict'
 import type { LoginRequest } from './generated/LoginRequest'
 import type { ServerInfo } from './generated/ServerInfo'
 import type { SessionInfo } from './generated/SessionInfo'
@@ -19,6 +24,8 @@ export class ApiFailure extends Error {
   readonly status: number
   /** Seconds to wait before a retry, when the server sent `Retry-After`. */
   readonly retryAfter: number | null
+  /** For a refused upload chunk: the byte the server expects next. */
+  uploadOffset: number | null = null
   constructor(status: number, err: ApiError, retryAfter: number | null = null) {
     super(err.message)
     this.code = err.code
@@ -88,6 +95,22 @@ export const api = {
     places: () => request<Places>('GET', '/api/v1/fs/places'),
     search: (q: string, signal?: AbortSignal) =>
       request<SearchResults>('GET', `/api/v1/fs/search?${new URLSearchParams({ q })}`, undefined, signal),
+    mkdir: (path: string) => request<void>('POST', '/api/v1/fs/mkdir', { path }),
+    rename: (from: string, to: string, conflict: Conflict = 'fail') =>
+      request<PathResult>('POST', '/api/v1/fs/rename', { from, to, conflict }),
+    copy: (from: string, to: string, conflict: Conflict = 'fail') =>
+      request<PathResult>('POST', '/api/v1/fs/copy', { from, to, conflict }),
+    remove: (path: string) => request<void>('POST', '/api/v1/fs/delete', { path }),
+    trash: (path: string) => request<void>('POST', '/api/v1/fs/trash', { path }),
+    trashList: () => request<TrashItem[]>('GET', '/api/v1/fs/trash'),
+    trashRestore: (id: string, conflict: Conflict = 'fail') =>
+      request<PathResult>('POST', '/api/v1/fs/trash/restore', { id, conflict }),
+    trashDelete: (id: string) => request<void>('POST', '/api/v1/fs/trash/delete', { id }),
+    trashEmpty: () => request<void>('POST', '/api/v1/fs/trash/empty', {}),
+    uploadBegin: (dir: string, name: string, size: number, conflict: Conflict) =>
+      request<UploadStatus>('POST', '/api/v1/fs/uploads', { dir, name, size, conflict }),
+    uploadStatus: (id: string) => request<UploadStatus>('GET', `/api/v1/fs/uploads/${id}`),
+    uploadCancel: (id: string) => request<void>('DELETE', `/api/v1/fs/uploads/${id}`),
   },
 }
 
@@ -146,4 +169,60 @@ export async function readFileStart(path: string, maxBytes: number, signal?: Abo
   const bytes = new Uint8Array(await res.arrayBuffer())
   const total = Number(res.headers.get('Content-Range')?.split('/')[1] ?? bytes.length)
   return { bytes, total }
+}
+
+/** Sends raw bytes: a file save or a chunk of an upload. */
+async function sendBytes<T>(method: string, path: string, body: Blob | string, headers: Record<string, string>, signal?: AbortSignal): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(path, { method, body, signal, credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream', ...headers } })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiFailure(0, { code: 'aborted', message: 'The request was cancelled.' })
+    }
+    onNetworkFailure()
+    throw new ApiFailure(0, { code: 'network', message: 'The server did not answer.' })
+  }
+  if (!res.ok) {
+    const err = (await res.json().catch(() => null)) as ApiError | null
+    const failure = new ApiFailure(res.status, err ?? { code: 'http_error', message: res.statusText })
+    // For a chunk that the server already has: where to continue.
+    const offset = res.headers.get('Upload-Offset')
+    if (offset !== null) failure.uploadOffset = Number(offset)
+    throw failure
+  }
+  return (await res.json()) as T
+}
+
+/** Sends the bytes of an upload from `offset`. */
+export function uploadChunk(id: string, offset: number, chunk: Blob, signal?: AbortSignal): Promise<UploadStatus> {
+  return sendBytes<UploadStatus>('PATCH', `/api/v1/fs/uploads/${id}?offset=${offset}`, chunk, {}, signal)
+}
+
+/** Reads a whole text file, with the version tag that a later save needs. */
+export async function readTextFile(path: string, signal?: AbortSignal): Promise<{ bytes: Uint8Array; etag: string }> {
+  let res: Response
+  try {
+    res = await fetch(fileUrl(path), { credentials: 'same-origin', signal, cache: 'no-store' })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiFailure(0, { code: 'aborted', message: 'The request was cancelled.' })
+    }
+    onNetworkFailure()
+    throw new ApiFailure(0, { code: 'network', message: 'The server did not answer.' })
+  }
+  if (!res.ok) {
+    const err = (await res.json().catch(() => null)) as ApiError | null
+    throw new ApiFailure(res.status, err ?? { code: 'http_error', message: res.statusText })
+  }
+  return { bytes: new Uint8Array(await res.arrayBuffer()), etag: res.headers.get('ETag') ?? '' }
+}
+
+/** Saves a text file. `etag` is the version that was read. With `force`,
+ * the file is written even if it changed since. Returns the new version. */
+export async function saveTextFile(path: string, text: string, etag: string, force = false): Promise<string> {
+  const params = new URLSearchParams({ path })
+  if (force) params.set('force', 'true')
+  const headers: Record<string, string> = force || !etag ? {} : { 'If-Match': etag }
+  return (await sendBytes<SaveResult>('PUT', `/api/v1/fs/file?${params}`, text, headers)).etag
 }

@@ -1,8 +1,9 @@
 // The left column of the file browser: home, root, favourites and disks.
-import { Folder, HardDrive, House, Server, Star } from 'lucide-react'
+import { Folder, HardDrive, House, Server, Star, Trash2 } from 'lucide-react'
 import { memo } from 'react'
 import type { Places } from '../../api/generated/Places'
 import { t } from '../../i18n'
+import { TRASH } from './changes'
 import { baseName, formatSize } from './paths'
 
 interface Props {
@@ -20,7 +21,7 @@ export const Sidebar = memo(function Sidebar({ path, places, favourites, onGo }:
       type="button"
       className="side-item"
       aria-current={path === target ? 'page' : undefined}
-      title={target}
+      title={target.startsWith(':') ? undefined : target}
       onClick={() => onGo(target)}
     >
       {icon}
@@ -33,6 +34,7 @@ export const Sidebar = memo(function Sidebar({ path, places, favourites, onGo }:
         <h3>{f.groupPlaces}</h3>
         {places?.home && item(places.home, f.home, <House size={15} aria-hidden="true" />)}
         {item('/', f.root, <Server size={15} aria-hidden="true" />)}
+        {item(TRASH, f.trash, <Trash2 size={15} aria-hidden="true" />)}
       </div>
       {favourites.length > 0 && (
         <div className="files-group">

@@ -40,8 +40,19 @@ impl From<FsError> for ApiErr {
         let status = match e {
             FsError::NotFound => StatusCode::NOT_FOUND,
             FsError::PermissionDenied => StatusCode::FORBIDDEN,
-            FsError::InvalidPath(_) | FsError::NotADirectory | FsError::NotAFile => {
-                StatusCode::BAD_REQUEST
+            FsError::InvalidPath(_)
+            | FsError::NotADirectory
+            | FsError::NotAFile
+            | FsError::CrossDevice
+            | FsError::TooMany => StatusCode::BAD_REQUEST,
+            FsError::AlreadyExists | FsError::OffsetMismatch(_) => StatusCode::CONFLICT,
+            FsError::ChangedOnDisk => StatusCode::PRECONDITION_FAILED,
+            FsError::Io(ref io) if io.kind() == std::io::ErrorKind::StorageFull => {
+                return ApiErr::new(
+                    StatusCode::INSUFFICIENT_STORAGE,
+                    "no_space",
+                    "There is not enough free space on the disk.",
+                );
             }
             FsError::Io(ref io) => return ApiErr::internal(io),
         };
@@ -61,7 +72,7 @@ fn root_path() -> String {
 }
 
 /// Runs a file operation off the async runtime.
-async fn blocking<T, F>(state: &AppState, op: F) -> Result<T, ApiErr>
+pub(crate) async fn blocking<T, F>(state: &AppState, op: F) -> Result<T, ApiErr>
 where
     T: Send + 'static,
     F: FnOnce(&Root) -> Result<T, FsError> + Send + 'static,
@@ -195,7 +206,7 @@ pub async fn search(
 
 /// The home folder of the user that runs the server, as a UI path. `None`
 /// if it is outside the files root or is not a folder.
-fn home_folder(files_root: &Path, root: &Root) -> Option<String> {
+pub fn home_folder(files_root: &Path, root: &Root) -> Option<String> {
     std::env::var_os("HOME")
         .and_then(|home| ui_path(files_root, Path::new(&home)))
         .filter(|path| root.entry(path).is_ok_and(|e| e.kind == EntryKind::Dir))
@@ -418,8 +429,9 @@ pub async fn download(
     } else {
         "attachment"
     };
-    // Changes when the size or the modified time of the file changes.
-    let etag = format!("\"{len:x}-{:x}\"", open.modified.unwrap_or(0));
+    // Changes when the size or the modified time of the file changes. The
+    // editor sends it back with a save, as `If-Match`.
+    let etag = format!("\"{}\"", open.version);
 
     let range_header = headers
         .get(header::RANGE)

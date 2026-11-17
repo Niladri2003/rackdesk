@@ -122,6 +122,7 @@ const filesProvider: RemoteSearchProvider = async (query, signal) => {
         icon: kind.icon,
         run: (shell) => {
           if (kind.open === 'folder') shell.openApp('files', { path })
+          else if (kind.open === 'text' && hit.entry.size <= 2 * 1024 * 1024) shell.openApp('editor', { path })
           else if (kind.open !== 'none') shell.openApp('preview', { path })
           // A file with no preview: show the folder that holds it.
           else shell.openApp('files', { path: hit.dir })

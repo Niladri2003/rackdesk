@@ -74,6 +74,18 @@ export async function titleGrip(win: Locator) {
 
 /** Fails if the page breaks a WCAG 2.2 A or AA rule that axe can check. */
 export async function expectAccessible(page: Page): Promise<void> {
+  // Wait for windows to stop moving first. A window that is still growing
+  // or sliding covers a part of a button behind it for a moment, and axe
+  // then reports that button as too small. An animation with no end, such as
+  // a spinner, is left out.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  )
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()
   const summary = results.violations.map(
     (v) => `${v.id}: ${v.help}\n${v.nodes.map((n) => `    ${n.target.join(' ')}  ${n.failureSummary?.split('\n')[1]?.trim() ?? ''}`).join('\n')}`,

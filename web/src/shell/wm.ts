@@ -4,7 +4,7 @@
 // Coordinates are in CSS pixels, relative to the desktop area (the part of
 // the page right of the taskbar).
 
-export type AppId = 'files' | 'preview' | 'terminal' | 'settings'
+export type AppId = 'files' | 'preview' | 'editor' | 'terminal' | 'settings'
 export type Snap = 'left' | 'right'
 
 export interface Size {

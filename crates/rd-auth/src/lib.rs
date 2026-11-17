@@ -111,7 +111,6 @@ pub enum AuthError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
     pub username: String,
-    /// PHC string, e.g. "$argon2id$v=19$m=19456,t=2,p=1$...".
     pub password_hash: String,
     pub must_change_password: bool,
 }
@@ -229,6 +228,20 @@ pub fn check_new_password(password: &str) -> Result<(), AuthError> {
         return Err(AuthError::CommonPassword);
     }
     Ok(())
+}
+
+/// `bytes` random bytes as lower-case hex. Used for ids that must be hard to
+/// guess: 32 bytes for a session, 16 for an upload.
+pub fn random_hex(bytes: usize) -> Result<String, AuthError> {
+    let mut raw = vec![0u8; bytes];
+    getrandom::fill(&mut raw).map_err(|e| AuthError::Random(e.to_string()))?;
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes * 2);
+    for b in raw {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+    Ok(out)
 }
 
 pub fn generate_password() -> Result<String, AuthError> {

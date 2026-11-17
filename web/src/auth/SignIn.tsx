@@ -1,10 +1,11 @@
 // The sign-in page.
-import { CircleAlert, Eye, EyeOff, Server, Timer } from 'lucide-react'
+import { CircleAlert, Eye, EyeOff, Timer } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { SubmitEvent } from 'react'
 import { api, ApiFailure } from '../api/client'
 import type { SessionInfo } from '../api/generated/SessionInfo'
 import { errorText, t } from '../i18n'
+import { LogoTile } from '../ui/Logo'
 
 interface Props {
   /** Shown above the form, for example after the session ended. */
@@ -55,9 +56,7 @@ export function SignIn({ notice, onDone }: Props) {
     <div className="auth">
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-server">
-          <span className="auth-server-icon">
-            <Server size={19} aria-hidden="true" />
-          </span>
+          <LogoTile size={40} />
           <span className="auth-server-name">
             <b>{t.product}</b>
             <span className="mono muted">{t.signIn.serverAt(window.location.host)}</span>

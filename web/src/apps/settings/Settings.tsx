@@ -12,6 +12,7 @@ import { THEMES, setPrefs, useIsDark, usePrefs } from '../../theme/prefs'
 import type { Theme } from '../../theme/prefs'
 import { ACCENTS, WALLPAPERS, accentSwatch, wallpaperColor } from '../../theme/tokens'
 import type { Accent } from '../../theme/tokens'
+import { Lockup } from '../../ui/Logo'
 import type { AppProps } from '../registry'
 import { SECTIONS, sectionOf } from './sections'
 
@@ -284,6 +285,7 @@ function About() {
   const a = s.about
   return (
     <>
+      <Lockup size={44} />
       <Heading title={a.name} lead={a.lead} />
       {error && (
         <div className="alert" role="alert">

@@ -28,6 +28,9 @@ struct Args {
     /// The folder the file browser shows as "/". Nothing above it can be read.
     #[arg(long, env = "RACKDESK_FILES_ROOT", default_value = "/")]
     files_root: PathBuf,
+    /// Largest file that can be uploaded, in bytes. The default is 20 GiB.
+    #[arg(long, env = "RACKDESK_MAX_UPLOAD_BYTES", default_value_t = 20 * 1024 * 1024 * 1024)]
+    max_upload_bytes: u64,
     /// When to use HTTPS. "auto" uses HTTPS unless the listen address is loopback.
     #[arg(long, env = "RACKDESK_TLS", value_enum, default_value = "auto")]
     tls: TlsMode,
@@ -83,8 +86,16 @@ async fn main() -> anyhow::Result<()> {
     // points can be compared with it.
     let files_root = std::fs::canonicalize(&args.files_root)
         .with_context(|| format!("opening files root {}", args.files_root.display()))?;
-    let files = rd_fs::Root::open(&files_root)
+    let mut files = rd_fs::Root::open(&files_root)
         .with_context(|| format!("opening files root {}", files_root.display()))?;
+    // With a home folder beneath the files root, the trash is the one that
+    // desktop programs use too. Without, it is a folder at the top of the
+    // files root.
+    if let Some(home) = rackdeskd::files::home_folder(&files_root, &files) {
+        files = files
+            .with_trash_dir(&format!("{home}/.local/share/Trash"))
+            .context("setting the trash folder")?;
+    }
 
     let loopback = args.listen.ip().is_loopback();
     let use_tls = match args.tls {
@@ -103,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
         Config {
             data_dir: args.data_dir.clone(),
             files_root,
+            max_upload_bytes: args.max_upload_bytes,
             https: use_tls || args.behind_proxy,
             behind_proxy: args.behind_proxy,
         },

@@ -353,12 +353,121 @@
   height: 26px;
   padding: 0 10px;
   font-size: 12px;
-  color: var(--text);
   text-decoration: none;
+}
+/* The footer text is muted. A plain button in it keeps the normal text
+   colour. Primary and danger buttons keep their own. */
+.btn-small:not(.btn-primary, .btn-danger) {
+  color: var(--text);
 }
 .row {
   display: flex;
   gap: 8px;
+}
+
+.files-main {
+  position: relative;
+}
+.files-drop {
+  position: absolute;
+  inset: 6px;
+  z-index: 2;
+  border: 2px dashed var(--acc);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--acc-soft) 70%, transparent);
+  color: var(--text);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* ---------- Trash ---------- */
+
+.trash ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 10px 4px 18px;
+  border-bottom: 1px solid var(--line-2);
+}
+.trash-row > svg {
+  flex-shrink: 0;
+}
+.trash-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.trash-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trash-name .mono {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- Editor ---------- */
+
+.editor {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.editor-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.editor-host {
+  position: absolute;
+  inset: 0;
+  user-select: text;
+}
+.editor-host .cm-editor {
+  height: 100%;
+}
+.editor-host:focus-within {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+.editor-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  background: var(--danger-soft);
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+}
+.editor-banner > svg {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.editor-banner > span {
+  flex: 1;
+  min-width: 0;
+}
+.editor-banner .btn {
+  background: var(--win);
+}
+.editor-error {
+  color: var(--danger);
 }
 
 /* ---------- Preview ---------- */

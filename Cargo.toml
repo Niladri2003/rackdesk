@@ -37,7 +37,7 @@ ts-rs = "12"
 cap-std = "4"
 # Free and total space of a filesystem (statvfs), through a safe API. cap-std
 # already depends on it.
-rustix = { version = "1", features = ["fs"] }
+rustix = { version = "1", features = ["fs", "process"] }
 # Turns a file into a response body that is sent in chunks.
 tokio-util = { version = "0.7", features = ["io"] }
 argon2 = "0.5"

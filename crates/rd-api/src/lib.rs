@@ -61,6 +61,107 @@ pub struct DirListing {
     pub offset: u32,
 }
 
+/// What to do when the target name of a copy, move, upload or restore is
+/// already in use.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum Conflict {
+    /// Refuse with the error code `already_exists`.
+    #[default]
+    Fail,
+    /// Remove what is there and take its place.
+    Replace,
+    /// Keep what is there and use a free name, such as "notes (1).txt".
+    KeepBoth,
+}
+
+/// Body of `POST /api/v1/fs/mkdir`, `/fs/delete` and `/fs/trash`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PathRequest {
+    pub path: String,
+}
+
+/// Body of `POST /api/v1/fs/rename` (also used to move) and `/fs/copy`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TransferRequest {
+    pub from: String,
+    /// The full target path, with the new name as its last part.
+    pub to: String,
+    #[serde(default)]
+    pub conflict: Conflict,
+}
+
+/// The answer to a change that can end at another path than the one asked
+/// for, because of [`Conflict::KeepBoth`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PathResult {
+    pub path: String,
+}
+
+/// One entry in the trash.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TrashItem {
+    /// The name inside the trash. It identifies the item.
+    pub id: String,
+    /// Where the entry was before it was moved to the trash.
+    pub original_path: String,
+    /// Unix seconds.
+    #[ts(type = "number")]
+    pub deleted_at: i64,
+    pub entry: DirEntry,
+}
+
+/// Body of `POST /api/v1/fs/trash/restore` and `/fs/trash/delete`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TrashRequest {
+    pub id: String,
+    #[serde(default)]
+    pub conflict: Conflict,
+}
+
+/// The answer to `PUT /api/v1/fs/file`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SaveResult {
+    /// The new version tag of the file. Send it as `If-Match` with the next
+    /// save.
+    pub etag: String,
+}
+
+/// Body of `POST /api/v1/fs/uploads`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UploadRequest {
+    /// The folder that receives the file.
+    pub dir: String,
+    pub name: String,
+    /// Full size of the file in bytes.
+    #[ts(type = "number")]
+    pub size: u64,
+    #[serde(default)]
+    pub conflict: Conflict,
+}
+
+/// The state of an upload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UploadStatus {
+    pub id: String,
+    /// Bytes the server has. The next chunk must start here.
+    #[ts(type = "number")]
+    pub offset: u64,
+    #[ts(type = "number")]
+    pub size: u64,
+    /// Set when the upload is complete: the path of the finished file.
+    pub path: Option<String>,
+}
+
 /// A filesystem, with its use. Shown in the sidebar of the file browser.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

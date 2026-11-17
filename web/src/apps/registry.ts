@@ -3,11 +3,13 @@
 //
 // A window holds 1 of 3 kinds of content. Only `builtin` is implemented. The
 // other 2 exist so that adding them later does not change the window code.
-import { Eye, Folder, Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
+import { Eye, FilePen, Folder, Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { t } from '../i18n'
 import type { AppId, Size } from '../shell/wm'
+import { Editor } from './editor/Editor'
+import { TRASH } from './files/changes'
 import { Files } from './files/Files'
 import { baseName } from './files/paths'
 import { Placeholder } from './Placeholder'
@@ -22,7 +24,13 @@ export interface AppProps {
   /** Data kept for this window, for example the Settings section to show. */
   params: Record<string, string>
   setParams: (params: Record<string, string>) => void
+  /** Sets a check that runs when the user closes the window. It returns
+   * false to keep the window open, for example for unsaved changes. `null`
+   * removes the check. */
+  setCloseGuard: (guard: CloseGuard | null) => void
 }
+
+export type CloseGuard = () => Promise<boolean>
 
 export type WindowContent =
   /** A React component from this bundle. */
@@ -57,6 +65,16 @@ export const APPS: Record<AppId, AppDef> = {
     singleton: false,
     built: true,
     content: { kind: 'builtin', component: Files },
+    detail: (params) => (params.path === TRASH ? t.files.trash : params.path ? baseName(params.path) : ''),
+  },
+  editor: {
+    id: 'editor',
+    ...t.apps.editor,
+    icon: FilePen,
+    size: { w: 820, h: 580 },
+    singleton: false,
+    built: true,
+    content: { kind: 'builtin', component: Editor },
     detail: (params) => (params.path ? baseName(params.path) : ''),
   },
   preview: {

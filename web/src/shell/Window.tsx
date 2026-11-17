@@ -4,7 +4,7 @@ import { Copy, Minus, Square, X } from 'lucide-react'
 import { memo, useCallback, useRef, useState } from 'react'
 import type { Dispatch, PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { WindowBody } from '../apps/WindowBody'
-import type { AppDef } from '../apps/registry'
+import type { AppDef, CloseGuard } from '../apps/registry'
 import { t } from '../i18n'
 import { countRender } from '../lib/renderCount'
 import { geometry } from './wm'
@@ -26,13 +26,16 @@ interface Props {
   dispatch: Dispatch<WmAction>
   onSnapPreview: (to: SnapTarget) => void
   register: (id: number, el: HTMLElement | null) => void
+  /** Closes the window, after its close check if it has one. */
+  onClose: (id: number) => void
+  setGuard: (id: number, guard: CloseGuard | null) => void
 }
 
 type ResizeDir = 'e' | 's' | 'se'
 
 /** Memoised: every prop keeps its identity unless this window changed. So a
  * drag of one window draws that window again and no other. */
-export const Window = memo(function Window({ win, app, focused, compact, desk, deskRef, dispatch, onSnapPreview, register }: Props) {
+export const Window = memo(function Window({ win, app, focused, compact, desk, deskRef, dispatch, onSnapPreview, register, onClose, setGuard }: Props) {
   countRender(`window:${app.id}`)
   const rect: Rect = compact ? { x: 0, y: 0, w: desk.w, h: desk.h } : geometry(win, desk)
   const id = win.id
@@ -40,6 +43,7 @@ export const Window = memo(function Window({ win, app, focused, compact, desk, d
     (params: Record<string, string>) => dispatch({ type: 'setParams', id, params }),
     [dispatch, id],
   )
+  const setCloseGuard = useCallback((guard: CloseGuard | null) => setGuard(id, guard), [setGuard, id])
   const [dragging, setDragging] = useState(false)
   const drag = useRef<{
     sx: number
@@ -210,13 +214,13 @@ export const Window = memo(function Window({ win, app, focused, compact, desk, d
             className="icon-btn danger"
             aria-label={t.window.close}
             title={t.window.close}
-            onClick={() => dispatch({ type: 'close', id: win.id })}
+            onClick={() => onClose(win.id)}
           >
             <X size={16} aria-hidden="true" />
           </button>
         </div>
         <div className="win-body">
-          <WindowBody app={app} params={win.params} setParams={setParams} />
+          <WindowBody app={app} params={win.params} setParams={setParams} setCloseGuard={setCloseGuard} />
         </div>
       </div>
       {!compact && (

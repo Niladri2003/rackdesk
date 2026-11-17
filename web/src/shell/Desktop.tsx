@@ -4,17 +4,21 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { api, ApiFailure } from '../api/client'
 import type { SessionInfo } from '../api/generated/SessionInfo'
 import { APPS, APP_IDS, RAIL_APPS } from '../apps/registry'
+import type { CloseGuard } from '../apps/registry'
 import { errorText, t } from '../i18n'
 import { loadJson, saveJson } from '../lib/store'
 import { watchConnection } from './connection'
 import { ShellContext } from './context'
 import type { ShellApi } from './context'
+import { useQuestion } from './dialog'
+import { Dialogs } from './Dialogs'
 import { Launcher } from './Launcher'
 import { clearNotices, notify } from './notify'
 import { Rail } from './Rail'
 import type { RailState, RailWindow } from './Rail'
 import { Switcher } from './Switcher'
 import { ConnectionBanner, Toasts } from './Toasts'
+import { TransferPanel } from './TransferPanel'
 import { Window } from './Window'
 import type { SnapTarget } from './Window'
 import { parseSaved, recentFirst, wmReducer } from './wm'
@@ -39,6 +43,7 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
   const [launcher, setLauncher] = useState(false)
   const [switcher, setSwitcher] = useState<number | null>(null)
   const [snapPreview, setSnapPreview] = useState<SnapTarget>(null)
+  const questionOpen = useQuestion() !== null
 
   const deskRef = useRef<HTMLDivElement>(null)
   const elements = useRef(new Map<number, HTMLElement>())
@@ -91,6 +96,22 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
   useEffect(() => {
     if (!launcher && switcher === null) focusCurrent()
   }, [state.focus, launcher, switcher, focusCurrent])
+
+  // Close checks of windows, for example an editor with unsaved changes.
+  const guards = useRef(new Map<number, CloseGuard>())
+  const setGuard = useCallback((id: number, guard: CloseGuard | null) => {
+    if (guard) guards.current.set(id, guard)
+    else guards.current.delete(id)
+  }, [])
+  const closeWindow = useCallback((id: number) => {
+    const guard = guards.current.get(id)
+    const close = () => {
+      guards.current.delete(id)
+      dispatch({ type: 'close', id })
+    }
+    if (!guard) close()
+    else void guard().then((ok) => ok && close())
+  }, [])
 
   const register = useCallback((id: number, el: HTMLElement | null) => {
     if (el) elements.current.set(id, el)
@@ -262,9 +283,10 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
   return (
     <ShellContext.Provider value={shell}>
       <div className="wall">
-        {/* While the search dialog or the switcher is open, the desktop
-            behind it takes no input and is hidden from screen readers. */}
-        <div className="desktop" inert={launcher || switcher !== null}>
+        {/* While the search dialog, the switcher or a question is open, the
+            desktop behind it takes no input and is hidden from screen
+            readers. */}
+        <div className="desktop" inert={launcher || switcher !== null || questionOpen}>
           <Rail states={railStates} windows={extraWindows} onWindow={onRailWindow} onLauncher={openLauncher} onApp={onRailApp} onCloseAutoFocus={onCloseAutoFocus} />
           <main ref={deskRef} className="desk" aria-label={t.product}>
             {snapPreview && <div className="snap-preview" style={{ ...preview, top: 6, height: desk.h - 12 }} />}
@@ -280,6 +302,8 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
                 dispatch={dispatch}
                 onSnapPreview={setSnapPreview}
                 register={register}
+                onClose={closeWindow}
+                setGuard={setGuard}
               />
             ))}
             <ConnectionBanner />
@@ -287,7 +311,9 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
         </div>
         {launcher && <Launcher onClose={() => setLauncher(false)} onCloseAutoFocus={onCloseAutoFocus} />}
         {switcher !== null && <Switcher wins={recentFirst(state.wins)} selected={switcher} onPick={commitSwitch} />}
+        <TransferPanel />
         <Toasts />
+        <Dialogs />
       </div>
     </ShellContext.Provider>
   )

@@ -20,6 +20,7 @@ export default async function globalSetup() {
   // so the account file is not in it.
   const filesRoot = mkdtempSync(join(tmpdir(), 'rackdesk-e2e-files-'))
   makeFiles(filesRoot)
+  process.env.RD_E2E_FILES_ROOT = filesRoot
 
   const server = spawn(BINARY, ['--data-dir', dataDir, '--files-root', filesRoot, '--listen', `127.0.0.1:${PORT}`], {
     stdio: ['ignore', 'pipe', 'pipe'],
