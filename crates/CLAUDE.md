@@ -31,8 +31,13 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - A new file operation is a new method on `rd_fs::Root`. It takes the UI path as `&str` and calls `clean_path` first.
 - Use the `cap_std` handle (`self.dir`), never `std::fs` with a joined path. A string check like `starts_with(root)` is not a control.
 - Describe symlinks, don't follow them, unless the operation is meant to and stays beneath the root.
+- A method that opens file content uses `Root::open_file`. It refuses folders, pipes and devices, and checks the type on the open file.
+- File content is sent by `files::download` only. It decides `attachment` or `inline` from a fixed list of types (`inline_type`). Adding a type to that list needs a line in the security plan.
+- A route that takes a path gets a row in the `..` test and the symlink test in `crates/rackdeskd/tests/files.rs`.
 - Each new method gets an escape test: `..`, an absolute path, a symlink pointing outside, and a symlink to `/`. See the tests at the bottom of `crates/rd-fs/src/lib.rs`.
-- Writes go to a temp file on the same filesystem, then `fsync`, then an atomic rename.
+- Writes go to a temp file in the target folder, then `fsync`, then an atomic rename. See `write_file` and `copy` in `crates/rd-fs/src/write.rs`.
+- A write method takes a `Conflict` rule when its target name can be in use. It never replaces an entry silently.
+- A new write method is added to the loop in the test `odd_paths_never_write_outside_the_root`, and its route to `write_routes()` in `crates/rackdeskd/tests/files_write.rs`. That table checks the session, the CSRF rule and the forced password change for every route.
 
 ## Endpoints
 - Routes are `/api/v1/...`. Unknown `/api/*` paths return 404, never the UI.
@@ -40,7 +45,7 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - A new route goes in the `protected` router in `crates/rackdeskd/src/lib.rs`. That router refuses requests with no session, and requests made before the initial password is changed.
 - Code that depends on time takes the time as an argument (`now: Instant`), as `rd_auth::session` does. Tests then need no sleep.
 - The CSRF check (`csrf.rs`) runs on every POST, PUT, PATCH and DELETE. A WebSocket upgrade is a GET, so it must call the same check itself.
-- Put a body size limit on every route that accepts a body.
+- Put a body size limit on every route that accepts a body. The API default is 8 KiB. A route that takes file content sets its own, as the save and chunk routes do in `lib.rs`.
 - Blocking work (file listing, argon2) runs in `tokio::task::spawn_blocking`, not on the async runtime.
 - Security headers are set once in `router()` in `crates/rackdeskd/src/lib.rs`. Loosening the CSP needs a line in the security plan saying why.
 
@@ -51,7 +56,7 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - Don't derive `Debug` on a type that holds a plaintext secret, or write a `Debug` that redacts it.
 
 ## Tests
-- Unit tests live in a `#[cfg(test)] mod tests` at the bottom of the file. Integration tests for `rackdeskd` go in `crates/rackdeskd/tests/` and drive the router in-process. `tests/session.rs` has the helpers (`server()`, `call()`, `sign_in()`).
+- Unit tests live in a `#[cfg(test)] mod tests` at the bottom of the file. Integration tests for `rackdeskd` go in `crates/rackdeskd/tests/` and drive the router in-process. `tests/common/mod.rs` has the helpers (`server()`, `call()`, `sign_in()`, `active_session()`).
 - Use `tempfile::tempdir()` for anything on disk. Never write under the repo or `/tmp` by hand.
 - Unix-only tests get `#[cfg(unix)]`.
 - A security control isn't done until a test fails without it.

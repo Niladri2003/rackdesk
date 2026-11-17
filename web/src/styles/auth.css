@@ -1,0 +1,89 @@
+/* Sign-in and first password pages. */
+
+.auth {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  user-select: text;
+}
+
+.auth-card {
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  background: var(--win);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-card h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.auth-server {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.auth-server svg {
+  flex-shrink: 0;
+}
+.auth-server-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.auth-server-name b {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.auth-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.auth-lead p {
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.auth-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.auth-rules li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.auth-rules li[data-ok='true'] {
+  color: var(--ok);
+}
+
+.auth-status {
+  color: var(--wall-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

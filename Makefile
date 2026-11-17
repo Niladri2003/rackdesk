@@ -1,7 +1,7 @@
 # RackDesk development commands. Run `make` or `make help` to list them.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run web build check fmt fmt-check clippy test web-check deny new-password clean
+.PHONY: help setup run web build check fmt fmt-check clippy test web-check e2e deny new-password clean
 
 DATA_DIR ?= ./dev-data
 
@@ -21,7 +21,7 @@ build: ## Build the release binary with the UI inside it
 	cd web && npm run build
 	cargo build --release -p rackdeskd
 
-check: fmt-check clippy test web-check ## Run every check that CI runs, except deny
+check: fmt-check clippy test web-check ## Run the fast checks that CI runs. `make e2e` and `make deny` are separate
 
 fmt: ## Format the Rust code
 	cargo fmt --all
@@ -38,6 +38,11 @@ test: ## Run the Rust tests and fail if the generated TypeScript types are stale
 
 web-check: ## Lint and build the UI
 	cd web && npm run lint && npm run build
+
+e2e: ## Run the browser tests against a temporary server (downloads a test browser on first use)
+	cd web && npm run build
+	cargo build -p rackdeskd
+	cd web && npx playwright install chromium && npm run e2e
 
 deny: ## Check dependencies for advisories and licences (needs cargo-deny)
 	cargo deny check

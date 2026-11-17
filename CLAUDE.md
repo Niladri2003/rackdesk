@@ -4,7 +4,7 @@ A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with
 
 **Goal:** the server tool people most want to install: useful in the first 5 minutes, a replacement for SSH in daily work, safe, light, and open source. The 5 product goals are at the top of `docs/ROADMAP.md`. Check every feature against them.
 
-**Status:** M0 (skeleton) and M1 (sign-in and sessions) are done. M2 (desktop shell) is next. `docs/ROADMAP.md` is the source of truth for what to build and in what order. Don't build ahead of the current milestone.
+**Status:** M0 (skeleton), M1 (sign-in and sessions), M2 (desktop shell), M3 (file browser, read) and M4 (file browser, write) are done. M5 (privilege split) is next. `docs/ROADMAP.md` is the source of truth for what to build and in what order. Don't build ahead of the current milestone.
 
 ## Important rules for every change
 **Important 1:** The hyphen (-) is the only dash. No em-dash, no en-dash, anywhere in any file, including numeric ranges (write 1-20) and empty-cell placeholders in tables. Do not use other AI-like words, phrases or symbols. Do not use emoji in codebase, may use in documentation only if very apt. Use simple short phrases; convey technical meaning only; use simple english language but without removing any technical term or meaning; remove filler words; avoid nominalizations; write one idea per sentence; skip throat-clearing openers; use concrete terms; remove redundant qualifiers; use digits for numbers. No metaphor or personification in technical statements; state the behavior literally: write "a partial report is scored and enters the benchmark", never "a partial is a full citizen".
@@ -27,6 +27,7 @@ A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with
 | `crates/rd-auth` | Accounts, argon2id, credential store, sessions, limit on password guessing |
 | `crates/rackdeskd` | The server: axum routes, sign-in, CSRF check, HTTPS, security headers, embedded UI |
 | `web/` | React + TypeScript + Vite UI |
+| `assets/logo/` | The logo files (SVG and PNG) and their rules |
 | `docs/` | Roadmap, architecture, security plan, ADRs, design brief, journals |
 
 More specific guides: `crates/CLAUDE.md` (Rust) and `web/CLAUDE.md` (UI).
@@ -43,7 +44,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                           # also regenerates web/src/api/generated/*.ts
 cd web && npm run lint && npm run build
 ```
-`make run`, `make web` and `make check` run the same commands. `make help` lists all targets.
+`make run`, `make web` and `make check` run the same commands. `make e2e` runs the browser tests (Playwright and axe); run it after any UI change. `make help` lists all targets.
 One crate: `cargo test -p rd-fs`. One test: `cargo test -p rd-fs symlink`.
 
 ## Rules that are never broken
@@ -59,6 +60,7 @@ These come from `docs/security/SECURITY.md`. Read it before touching auth, file 
 
 ## How work is done here
 - **A milestone is done when** its "Done when" line in the roadmap is true, the checks pass, the docs match the code, and `docs/journal/M<n>.md` is written (what was done, notes, what's next).
+- **Tests only where they are needed.** Write a test for a security control, for a rule that can break without anyone seeing it (paths, sessions, limits, the window manager), and for a bug that was found, so it can't come back. Don't write a test for every function, every text, or every visual detail. Before adding a test, name what would break without it. If nothing would, leave it out.
 - **A decision that's hard to reverse gets an ADR** in `docs/adr/NNNN-title.md`: status, context, decision, alternatives, consequences. Keep it under a page.
 - **A new threat or control** is a new row in the table in `docs/security/SECURITY.md`, with the milestone and the test that covers it.
 - **Changing scope** means editing `docs/ROADMAP.md` first, then keeping `README.md`, `docs/ARCHITECTURE.md` and `docs/security/SECURITY.md` in step.

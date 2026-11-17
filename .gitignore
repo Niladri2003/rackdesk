@@ -1,6 +1,9 @@
 /target
 /web/node_modules
 /web/dist
+/web/test-results
+/web/playwright-report
+/.playwright-mcp
 /dev-data
 *.swp
 .DS_Store

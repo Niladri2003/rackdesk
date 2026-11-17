@@ -22,6 +22,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 rust-embed.workspace = true
 mime_guess.workspace = true
+tokio-util.workspace = true
 axum-server.workspace = true
 rcgen.workspace = true
 rustls-pki-types.workspace = true
