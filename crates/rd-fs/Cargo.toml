@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 rd-api.workspace = true
 cap-std.workspace = true
+rustix.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

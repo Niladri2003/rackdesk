@@ -1,12 +1,16 @@
 // The search dialog (Ctrl+K). One input searches apps, settings and actions.
 import { ArrowDown, ArrowUp, CornerDownLeft, Search, SearchX } from 'lucide-react'
 import { Dialog } from 'radix-ui'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { t } from '../i18n'
 import { useShell } from './context'
 import { MOD_KEY } from './icons'
-import { search } from './search'
+import { REMOTE_MIN_CHARS, search, searchRemote } from './search'
+import type { SearchGroup } from './search'
+
+/** A remote search starts this long after the last key press. */
+const REMOTE_DELAY_MS = 250
 
 interface Props {
   onClose: () => void
@@ -20,14 +24,37 @@ export function Launcher({ onClose, onCloseAutoFocus }: Props) {
   const [selected, setSelected] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
 
+  // Results from the server (files), for the query they belong to.
+  const [remote, setRemote] = useState<{ query: string; groups: SearchGroup[] }>({ query: '', groups: [] })
+  const wanted = query.trim().toLowerCase()
+  const remoteWanted = wanted.length >= REMOTE_MIN_CHARS
+  const searching = remoteWanted && remote.query !== wanted
+  useEffect(() => {
+    if (!remoteWanted) return
+    const abort = new AbortController()
+    const timer = setTimeout(() => {
+      void searchRemote(wanted, abort.signal).then((groups) => {
+        if (!abort.signal.aborted) setRemote({ query: wanted, groups })
+      })
+    }, REMOTE_DELAY_MS)
+    return () => {
+      clearTimeout(timer)
+      abort.abort()
+    }
+  }, [wanted, remoteWanted])
+
   // Each group knows the position of its first item in the flat list.
   const groups = useMemo(() => {
-    const found = search(query)
+    const local = search(query)
+    // Files come after apps, and before settings and actions.
+    const files = remoteWanted && remote.query === wanted ? remote.groups : []
+    const split = local.length && local[0].label === t.search.groupApps ? 1 : 0
+    const found = [...local.slice(0, split), ...files, ...local.slice(split)]
     return found.map((g, i) => ({
       ...g,
       start: found.slice(0, i).reduce((count, earlier) => count + earlier.items.length, 0),
     }))
-  }, [query])
+  }, [query, remote, remoteWanted, wanted])
   const flat = groups.flatMap((g) => g.items)
   const active = flat.length ? Math.min(selected, flat.length - 1) : -1
   const optionId = (index: number) => `rd-search-option-${index}`
@@ -77,6 +104,7 @@ export function Launcher({ onClose, onCloseAutoFocus }: Props) {
               }}
               onKeyDown={onKeyDown}
             />
+            {searching && <span className="spinner" role="status" aria-label={t.search.searching} />}
             <span className="kbd" aria-hidden="true">
               esc
             </span>
@@ -119,7 +147,7 @@ export function Launcher({ onClose, onCloseAutoFocus }: Props) {
               </div>
             ))}
           </div>
-          {flat.length === 0 && (
+          {flat.length === 0 && !searching && (
             <div className="empty-state" role="status">
               <SearchX size={24} aria-hidden="true" />
               <b>{t.search.noneTitle}</b>

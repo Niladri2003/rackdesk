@@ -34,6 +34,13 @@
 .rail-spacer {
   flex: 1;
 }
+.rail-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+  flex-shrink: 0;
+}
 .rail-launcher,
 .rail-app {
   position: relative;

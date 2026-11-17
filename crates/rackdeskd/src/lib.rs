@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod csrf;
 pub mod error;
+pub mod files;
 pub mod state;
 pub mod tls;
 mod ui;
@@ -38,6 +39,11 @@ pub fn router(state: AppState) -> Router {
     // Every other API route needs a session whose password has been changed.
     let protected = Router::new()
         .route("/server", get(server_info))
+        .route("/fs/list", get(files::list))
+        .route("/fs/entry", get(files::entry))
+        .route("/fs/places", get(files::places))
+        .route("/fs/search", get(files::search))
+        .route("/fs/download", get(files::download))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_active_session,
@@ -72,7 +78,8 @@ pub fn router(state: AppState) -> Router {
             header::X_FRAME_OPTIONS,
             HeaderValue::from_static("DENY"),
         ))
-        .layer(SetResponseHeaderLayer::overriding(
+        // A file download sets a stricter policy of its own (files.rs).
+        .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
                 "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; \

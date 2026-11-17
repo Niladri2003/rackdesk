@@ -10,6 +10,8 @@ export const BASE_URL = `http://127.0.0.1:${PORT}`
 /** The password of the test account after global setup. It opens nothing
  * outside the temporary test server. */
 export const PASSWORD = 'e2e test phrase for rackdesk'
+/** Number of files in the `big` folder of the test files root. */
+export const BIG_FOLDER_SIZE = 3000
 
 const BINARY = resolve(import.meta.dirname, '../../target/debug/rackdeskd')
 

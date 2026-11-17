@@ -14,8 +14,19 @@ import type { AppId } from './wm'
 /** `focused`: a window of the app has focus. `open`: it has a window. */
 export type RailState = 'focused' | 'open' | 'closed'
 
+/** A window whose app has no fixed place on the taskbar, such as a preview. */
+export interface RailWindow {
+  id: number
+  app: AppId
+  title: string
+  state: RailState
+}
+
 interface Props {
   states: Record<AppId, RailState>
+  windows: RailWindow[]
+  /** Click on such a window: focus it, or minimise it if it is in front. */
+  onWindow: (id: number) => void
   onLauncher: () => void
   /** Click on an app: open it, focus it, or minimise it if it is in front. */
   onApp: (app: AppId) => void
@@ -24,7 +35,7 @@ interface Props {
 }
 
 /** Memoised: it does not draw again while a window moves. */
-export const Rail = memo(function Rail({ states, onLauncher, onApp, onCloseAutoFocus }: Props) {
+export const Rail = memo(function Rail({ states, windows, onWindow, onLauncher, onApp, onCloseAutoFocus }: Props) {
   countRender('rail')
   const shell = useShell()
   const { list, unread } = useNotices()
@@ -58,6 +69,26 @@ export const Rail = memo(function Rail({ states, onLauncher, onApp, onCloseAutoF
             onClick={() => onApp(id)}
           >
             <Icon size={19} aria-hidden="true" />
+            <span className="rail-indicator" aria-hidden="true" />
+          </button>
+        )
+      })}
+
+      {windows.length > 0 && <span className="rail-divider" aria-hidden="true" />}
+      {windows.map((w) => {
+        const Icon = APPS[w.app].icon
+        return (
+          <button
+            key={w.id}
+            type="button"
+            className="rail-app"
+            data-state={w.state}
+            aria-label={w.title}
+            aria-pressed={w.state === 'focused'}
+            title={w.title}
+            onClick={() => onWindow(w.id)}
+          >
+            <Icon size={18} aria-hidden="true" />
             <span className="rail-indicator" aria-hidden="true" />
           </button>
         )

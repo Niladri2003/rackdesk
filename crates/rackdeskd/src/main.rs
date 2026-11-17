@@ -25,9 +25,9 @@ struct Args {
         global = true
     )]
     data_dir: PathBuf,
-    /// The folder the file browser shows as "/". No route uses it yet.
-    #[arg(long, env = "RACKDESK_FILES_ROOT")]
-    files_root: Option<PathBuf>,
+    /// The folder the file browser shows as "/". Nothing above it can be read.
+    #[arg(long, env = "RACKDESK_FILES_ROOT", default_value = "/")]
+    files_root: PathBuf,
     /// When to use HTTPS. "auto" uses HTTPS unless the listen address is loopback.
     #[arg(long, env = "RACKDESK_TLS", value_enum, default_value = "auto")]
     tls: TlsMode,
@@ -79,10 +79,12 @@ async fn main() -> anyhow::Result<()> {
         print_password("RackDesk admin account created", &password);
     }
 
-    if let Some(root) = &args.files_root {
-        rd_fs::Root::open(root)
-            .with_context(|| format!("opening files root {}", root.display()))?;
-    }
+    // An absolute path with links resolved, so the home folder and the mount
+    // points can be compared with it.
+    let files_root = std::fs::canonicalize(&args.files_root)
+        .with_context(|| format!("opening files root {}", args.files_root.display()))?;
+    let files = rd_fs::Root::open(&files_root)
+        .with_context(|| format!("opening files root {}", files_root.display()))?;
 
     let loopback = args.listen.ip().is_loopback();
     let use_tls = match args.tls {
@@ -100,10 +102,12 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::new(
         Config {
             data_dir: args.data_dir.clone(),
+            files_root,
             https: use_tls || args.behind_proxy,
             behind_proxy: args.behind_proxy,
         },
         creds,
+        files,
     )
     .await
     .context("preparing the server state")?;

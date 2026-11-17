@@ -3,12 +3,15 @@
 //
 // A window holds 1 of 3 kinds of content. Only `builtin` is implemented. The
 // other 2 exist so that adding them later does not change the window code.
-import { Folder, Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
+import { Eye, Folder, Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { t } from '../i18n'
 import type { AppId, Size } from '../shell/wm'
+import { Files } from './files/Files'
+import { baseName } from './files/paths'
 import { Placeholder } from './Placeholder'
+import { Preview } from './preview/Preview'
 import { Settings } from './settings/Settings'
 import { sectionName } from './settings/sections'
 
@@ -52,8 +55,19 @@ export const APPS: Record<AppId, AppDef> = {
     icon: Folder,
     size: { w: 1080, h: 660 },
     singleton: false,
-    built: false,
-    content: { kind: 'builtin', component: Placeholder },
+    built: true,
+    content: { kind: 'builtin', component: Files },
+    detail: (params) => (params.path ? baseName(params.path) : ''),
+  },
+  preview: {
+    id: 'preview',
+    ...t.apps.preview,
+    icon: Eye,
+    size: { w: 860, h: 600 },
+    singleton: false,
+    built: true,
+    content: { kind: 'builtin', component: Preview },
+    detail: (params) => (params.path ? baseName(params.path) : ''),
   },
   terminal: {
     id: 'terminal',

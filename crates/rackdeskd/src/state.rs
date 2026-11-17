@@ -4,18 +4,23 @@ use crate::error::ApiErr;
 use rd_auth::limiter::{Limiter, Policy};
 use rd_auth::session::SessionStore;
 use rd_auth::{CredentialStore, Credentials};
+use rd_fs::Root;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
 /// How many password hashes run at once. One hash uses about 19 MiB of
 /// memory, so this bounds the memory a burst of sign-in attempts can take.
 const HASHES_AT_ONCE: usize = 2;
+/// How many file searches run at once. A search can read many folders.
+const SEARCHES_AT_ONCE: usize = 2;
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub data_dir: PathBuf,
+    /// The folder the file browser shows as "/".
+    pub files_root: PathBuf,
     /// True when browsers reach the server over HTTPS. The session cookie is
     /// then marked `Secure`.
     pub https: bool,
@@ -35,6 +40,8 @@ struct Inner {
     pub ip_limiter: Limiter,
     pub account_limiter: Limiter,
     hashing: Semaphore,
+    files: Arc<Root>,
+    searches: Semaphore,
     /// Checked when the username is unknown, so that case takes as long as a
     /// wrong password.
     dummy_hash: String,
@@ -70,8 +77,13 @@ impl FileStamp {
 }
 
 impl AppState {
-    /// `creds` is the account as loaded at start-up.
-    pub async fn new(config: Config, creds: Credentials) -> Result<Self, rd_auth::AuthError> {
+    /// `creds` is the account as loaded at start-up. `files` is the opened
+    /// files root.
+    pub async fn new(
+        config: Config,
+        creds: Credentials,
+        files: Root,
+    ) -> Result<Self, rd_auth::AuthError> {
         let store = CredentialStore::new(&config.data_dir);
         let stamp = FileStamp::read(store.path()).await;
         let dummy_hash = rd_auth::hash_password(&rd_auth::generate_password()?)?;
@@ -83,12 +95,24 @@ impl AppState {
             ip_limiter: Limiter::new(Policy::PER_IP),
             account_limiter: Limiter::new(Policy::PER_ACCOUNT),
             hashing: Semaphore::new(HASHES_AT_ONCE),
+            files: Arc::new(files),
+            searches: Semaphore::new(SEARCHES_AT_ONCE),
             dummy_hash,
         })))
     }
 
     pub fn config(&self) -> &Config {
         &self.0.config
+    }
+
+    /// The folder tree the file browser may read.
+    pub fn files(&self) -> Arc<Root> {
+        Arc::clone(&self.0.files)
+    }
+
+    /// Waits for a free search slot.
+    pub async fn search_permit(&self) -> Result<SemaphorePermit<'_>, ApiErr> {
+        self.0.searches.acquire().await.map_err(ApiErr::internal)
     }
 
     pub fn sessions(&self) -> &SessionStore {

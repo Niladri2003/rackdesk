@@ -33,6 +33,20 @@ pub struct DirEntry {
     pub modified: Option<i64>,
     /// Permission bits, e.g. 0o755 (Unix only).
     pub mode: Option<u32>,
+    /// For a symlink: the kind of the entry it points to. `None` for other
+    /// kinds, for a broken link, and for a link that leaves the files root.
+    pub target: Option<EntryKind>,
+}
+
+/// The column a listing is sorted by. Folders always come before files.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum SortKey {
+    #[default]
+    Name,
+    Size,
+    Modified,
 }
 
 /// A page of a directory listing. Large folders are paged, never sent whole.
@@ -45,6 +59,48 @@ pub struct DirListing {
     /// Total number of entries in the folder (for "100,000 items" and scrollbars).
     pub total: u32,
     pub offset: u32,
+}
+
+/// A filesystem, with its use. Shown in the sidebar of the file browser.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Disk {
+    /// Where it is mounted, as a path beneath the files root.
+    pub path: String,
+    /// Bytes.
+    #[ts(type = "number")]
+    pub total: u64,
+    /// Bytes that an unprivileged user can still write.
+    #[ts(type = "number")]
+    pub free: u64,
+}
+
+/// Starting points for the file browser.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Places {
+    /// The home folder of the user that runs the server, if it is beneath
+    /// the files root.
+    pub home: Option<String>,
+    pub disks: Vec<Disk>,
+}
+
+/// One file or folder found by a search.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SearchHit {
+    /// The folder that holds the entry.
+    pub dir: String,
+    pub entry: DirEntry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SearchResults {
+    pub hits: Vec<SearchHit>,
+    /// True if the search stopped at a limit (time, folders visited or
+    /// number of hits) before it had walked the whole tree.
+    pub truncated: bool,
 }
 
 // ---------- Apps and windows ----------

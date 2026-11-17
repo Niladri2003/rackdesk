@@ -2,7 +2,7 @@
 
 Read the root `CLAUDE.md` first. This file covers the React app in `web/`.
 
-**Status:** the desktop shell is built: sign-in pages, window manager, taskbar, search, notifications and Settings. Files and Terminal are placeholder windows. The look follows the accepted design ("Shelf" direction: a rail on the left edge).
+**Status:** the desktop shell, Settings, the file browser (read only) and the file preview are built. Terminal is a placeholder window. The look follows the accepted design ("Shelf" direction: a rail on the left edge).
 
 ## Commands
 ```sh
@@ -14,9 +14,9 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 `make e2e` from the repo root builds both and runs the tests. Run it after any UI change.
 
 ## Stack
-- **Installed:** React 19, TypeScript, Vite, oxlint, Radix UI (`radix-ui`), Lucide icons (`lucide-react`). Tests: Playwright, `@axe-core/playwright`.
+- **Installed:** React 19, TypeScript, Vite, oxlint, Radix UI (`radix-ui`), Lucide icons (`lucide-react`), TanStack Virtual (`@tanstack/react-virtual`). Tests: Playwright, `@axe-core/playwright`.
 - **Not used, on purpose:** Tailwind CSS and Motion. Styles are plain CSS with tokens, and animations are CSS transitions (ADR 0005).
-- **Planned for later apps:** TanStack Virtual (file lists), xterm.js (terminal), CodeMirror (editor), dnd-kit (drag and drop).
+- **Planned for later apps:** xterm.js (terminal), CodeMirror (editor), dnd-kit (drag and drop).
 - Check with the user before adding anything outside this list.
 
 ## Where things are
@@ -44,6 +44,7 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 - The CSP is `default-src 'self'` with no inline scripts. So: no CDN scripts, no remote fonts or images, no `eval`, no inline `<script>`. Fonts and icons are bundled.
 - Never render a user's file as HTML or SVG in our origin. Previews are text, an `<img>`/`<video>` of a download URL, or a sandboxed frame. No `dangerouslySetInnerHTML` with file content or server strings.
 - File names and paths are untrusted text. Render them as text and handle very long names.
+- File content is untrusted too. `fileUrl(path)` gives a download. `fileUrl(path, true)` asks the server to show it in the page, and the server agrees only for image, video, audio and PDF types. Text is read with `readFileStart` and drawn as text nodes (`apps/preview/highlight.ts` returns pieces of text, not HTML).
 - Data from `localStorage` is untrusted. Check every field when reading it, as `parseSaved` in `wm.ts` does.
 - Hiding or disabling a control is for usability. The server enforces the rule.
 
@@ -52,7 +53,7 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 2. Add its name and description to `apps` in `src/i18n/en.ts`.
 3. Create `src/apps/<name>/` with a component that takes `AppProps`.
 4. Add an entry to `APPS` in `src/apps/registry.ts`, and to `RAIL_APPS` if it belongs on the taskbar.
-5. Add a search provider to `PROVIDERS` in `src/shell/search.ts`.
+5. Add a search provider to `PROVIDERS` in `src/shell/search.ts`, or to `REMOTE_PROVIDERS` if it asks the server.
 6. Add a browser test, and add the app's states to the accessibility test in `e2e/desktop.spec.ts`.
 
 ## Structure rules
@@ -71,7 +72,8 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 - Icons that only decorate get `aria-hidden="true"`. A button with only an icon gets an `aria-label`.
 - Respect `prefers-reduced-motion`. `base.css` turns off all transitions for it.
 - Responsive: full windowing at 1024 px and wider, every window maximised below that. The phone layout is not built.
-- Long lists are virtualised. A folder with 100,000 entries must scroll smoothly.
+- Long lists are virtualised and loaded in pages. See `apps/files/useListing.ts` and the list in `Files.tsx`. A folder with 100,000 entries must scroll smoothly.
+- A container has `role="listbox"` only while it holds options. An empty, loading or failed state is a message, not a list.
 - Every data view has its empty, loading, error and disconnected states.
 
 ## Style

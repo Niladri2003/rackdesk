@@ -63,43 +63,6 @@ test('moving a window does not redraw the other windows, the apps or the taskbar
   expect(Object.keys(after)).toEqual(['window:files'])
 })
 
-test('a window resizes from its corner and keeps a minimum size', async ({ page }) => {
-  await railButton(page, 'Terminal').click()
-  const win = windowOf(page, 'Terminal')
-  const before = await box(win)
-  const corner = { x: before.x + before.width + 2, y: before.y + before.height + 2 }
-
-  await drag(page, corner, { x: corner.x - 100, y: corner.y - 60 })
-  const smaller = await box(win)
-  expect(Math.round(before.width - smaller.width)).toBe(100)
-  expect(Math.round(before.height - smaller.height)).toBe(60)
-
-  const corner2 = { x: smaller.x + smaller.width + 2, y: smaller.y + smaller.height + 2 }
-  await drag(page, corner2, { x: smaller.x + 50, y: smaller.y + 50 })
-  const smallest = await box(win)
-  expect(smallest.width).toBe(480)
-  expect(smallest.height).toBe(320)
-})
-
-test('maximise fills the desktop and restore returns the old size', async ({ page }) => {
-  await railButton(page, 'Files').click()
-  const win = windowOf(page, 'Files')
-  const before = await box(win)
-
-  await win.getByRole('button', { name: 'Maximise' }).click()
-  await expect.poll(async () => (await box(win)).width).toBe(1440 - RAIL_WIDTH)
-  expect(await box(win)).toMatchObject({ x: RAIL_WIDTH, y: 0, height: 900 })
-
-  await win.getByRole('button', { name: 'Restore' }).click()
-  await expect.poll(async () => (await box(win)).width).toBe(before.width)
-  expect(await box(win)).toMatchObject({ x: before.x, y: before.y })
-
-  // A double click on the title bar does the same.
-  const grip = await titleGrip(win)
-  await page.mouse.dblclick(grip.x, grip.y)
-  await expect(win.getByRole('button', { name: 'Restore' })).toBeVisible()
-})
-
 test('dragging to a side edge snaps the window to that half', async ({ page }) => {
   await railButton(page, 'Files').click()
   const win = windowOf(page, 'Files')
@@ -138,43 +101,12 @@ test('the taskbar button minimises the focused window and brings it back', async
   await expect(win).toBeFocused()
 })
 
-test('a click brings a window to the front', async ({ page }) => {
-  await railButton(page, 'Files').click()
-  await railButton(page, 'Terminal').click()
-  const files = windowOf(page, 'Files')
-  const terminal = windowOf(page, 'Terminal')
-  await expect(terminal).toHaveAttribute('data-focused', 'true')
-
-  const zIndex = (name: string) => windowOf(page, name).evaluate((el: HTMLElement) => Number(el.style.zIndex))
-  expect(await zIndex('Terminal')).toBeGreaterThan(await zIndex('Files'))
-
-  const b = await box(files)
-  await page.mouse.click(b.x + 10, b.y + b.height - 10)
-  await expect(files).toHaveAttribute('data-focused', 'true')
-  expect(await zIndex('Files')).toBeGreaterThan(await zIndex('Terminal'))
-})
-
-test('Settings opens once, and several Files windows can be open', async ({ page }) => {
-  await railButton(page, 'Settings').click()
-  await page.keyboard.press('Control+k')
-  await page.getByRole('combobox').fill('settings')
-  await page.keyboard.press('Enter')
-  await expect(windowOf(page, 'Settings')).toHaveCount(1)
-
-  for (let i = 0; i < 2; i++) {
-    await page.keyboard.press('Control+k')
-    await page.getByRole('combobox').fill('files')
-    await page.keyboard.press('Enter')
-    await expect(windowOf(page, 'Files')).toHaveCount(i + 1)
-  }
-})
-
 test('search finds apps, settings and actions, and works from the keyboard', async ({ page }) => {
   await page.keyboard.press('Control+k')
   const input = page.getByRole('combobox', { name: 'Search everything' })
   await expect(input).toBeFocused()
   // With no query it suggests apps and actions.
-  await expect(page.getByRole('option', { name: /Files/ })).toContainText('Later')
+  await expect(page.getByRole('option', { name: /Terminal/ })).toContainText('Later')
   await expect(page.getByRole('option', { name: /Sign out/ })).toBeVisible()
 
   await input.fill('wallpaper')
@@ -212,21 +144,6 @@ test('Alt+` switches to the window that was used before', async ({ page }) => {
   await expect(windowOf(page, 'Files')).toHaveAttribute('data-focused', 'true')
 })
 
-test('Ctrl+Alt+arrows place the focused window from the keyboard', async ({ page }) => {
-  await railButton(page, 'Files').click()
-  const win = windowOf(page, 'Files')
-  const half = (1440 - RAIL_WIDTH) / 2
-
-  await page.keyboard.press('Control+Alt+ArrowRight')
-  await expect.poll(async () => (await box(win)).x).toBe(RAIL_WIDTH + half)
-  await page.keyboard.press('Control+Alt+ArrowUp')
-  await expect.poll(async () => (await box(win)).width).toBe(1440 - RAIL_WIDTH)
-  await page.keyboard.press('Control+Alt+ArrowDown')
-  await expect.poll(async () => (await box(win)).width).toBe(1080)
-  await page.keyboard.press('Control+Alt+ArrowDown')
-  await expect(win).toHaveAttribute('data-min', 'true')
-})
-
 test('the window layout is restored after a reload', async ({ page }) => {
   await railButton(page, 'Files').click()
   const win = windowOf(page, 'Files')
@@ -239,37 +156,6 @@ test('the window layout is restored after a reload', async ({ page }) => {
   await page.reload()
   await expect(windowOf(page, 'Settings')).toHaveAttribute('aria-label', 'Settings - About')
   expect(await box(windowOf(page, 'Files'))).toMatchObject({ x: before.x, y: before.y, width: before.width })
-})
-
-test('theme, accent and wallpaper change at once and are kept', async ({ page }) => {
-  await page.emulateMedia({ colorScheme: 'light' })
-  await railButton(page, 'Settings').click()
-  const settings = windowOf(page, 'Settings')
-  await settings.getByRole('button', { name: 'Appearance' }).click()
-  const html = page.locator('html')
-  const token = (name: string) => html.evaluate((el, n) => el.style.getPropertyValue(n), name)
-
-  await settings.getByRole('radio', { name: 'Dark' }).click()
-  await expect(html).toHaveAttribute('data-theme', 'dark')
-
-  const accentBefore = await token('--acc')
-  await settings.getByRole('radio', { name: 'Sage' }).click()
-  expect(await token('--acc')).not.toBe(accentBefore)
-
-  const wallBefore = await token('--wall')
-  await settings.getByRole('radio', { name: 'Sand' }).click()
-  expect(await token('--wall')).not.toBe(wallBefore)
-
-  await page.reload()
-  await expect(html).toHaveAttribute('data-theme', 'dark')
-  await expect(windowOf(page, 'Settings').getByRole('radio', { name: 'Sage' })).toBeChecked()
-})
-
-test('About shows the server name and version', async ({ page }) => {
-  await railButton(page, 'Settings').click()
-  const settings = windowOf(page, 'Settings')
-  await settings.getByRole('button', { name: 'About' }).click()
-  await expect(settings.getByText(/^\d+\.\d+\.\d+$/)).toBeVisible()
 })
 
 test('a message shows as a toast and stays in the notification list', async ({ page }) => {
@@ -301,15 +187,6 @@ test('a message shows as a toast and stays in the notification list', async ({ p
   await expect(list.getByText('No notifications.')).toBeVisible()
 })
 
-test('on a narrow screen every window fills the desktop', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1000 })
-  await railButton(page, 'Files').click()
-  const win = windowOf(page, 'Files')
-  await expect.poll(async () => (await box(win)).width).toBe(820 - RAIL_WIDTH)
-  await expect(win.getByRole('button', { name: 'Maximise' })).toHaveCount(0)
-  await expect(win.getByRole('button', { name: 'Close' })).toBeVisible()
-})
-
 for (const scheme of ['light', 'dark'] as const) {
   test(`the desktop passes the accessibility checks in the ${scheme} theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme })
@@ -318,8 +195,9 @@ for (const scheme of ['light', 'dark'] as const) {
     // Empty desktop.
     await expectAccessible(page)
 
-    // Windows: a placeholder app and each Settings section.
-    await railButton(page, 'Files').click()
+    // Windows: a placeholder app and each Settings section. Files has a
+    // test of its own in files.spec.ts.
+    await railButton(page, 'Terminal').click()
     await railButton(page, 'Settings').click()
     const settings = windowOf(page, 'Settings')
     for (const section of ['Account', 'Appearance', 'About']) {

@@ -2,11 +2,11 @@
 // the generated password with a known one. Returns the function that stops
 // the server and deletes the folder.
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { PORT } from '../playwright.config'
-import { BASE_URL, PASSWORD, signInRequest } from './helpers'
+import { BASE_URL, BIG_FOLDER_SIZE, PASSWORD, signInRequest } from './helpers'
 
 export const BINARY = resolve(import.meta.dirname, '../../target/debug/rackdeskd')
 
@@ -16,13 +16,18 @@ export default async function globalSetup() {
   }
   const dataDir = mkdtempSync(join(tmpdir(), 'rackdesk-e2e-'))
   process.env.RD_E2E_DATA_DIR = dataDir
+  // The file browser sees only this folder. It is apart from the data folder,
+  // so the account file is not in it.
+  const filesRoot = mkdtempSync(join(tmpdir(), 'rackdesk-e2e-files-'))
+  makeFiles(filesRoot)
 
-  const server = spawn(BINARY, ['--data-dir', dataDir, '--listen', `127.0.0.1:${PORT}`], {
+  const server = spawn(BINARY, ['--data-dir', dataDir, '--files-root', filesRoot, '--listen', `127.0.0.1:${PORT}`], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const stop = () => {
     server.kill('SIGINT')
     rmSync(dataDir, { recursive: true, force: true })
+    rmSync(filesRoot, { recursive: true, force: true })
   }
 
   try {
@@ -55,6 +60,30 @@ export default async function globalSetup() {
     throw e
   }
   return stop
+}
+
+/** The files that the file browser tests expect. */
+function makeFiles(root: string): void {
+  mkdirSync(join(root, 'docs/deep'), { recursive: true })
+  mkdirSync(join(root, 'photos'))
+  mkdirSync(join(root, 'big'))
+  mkdirSync(join(root, 'empty'))
+  writeFileSync(join(root, 'docs/guide.md'), '# Guide\n\nHello from the guide.\n')
+  writeFileSync(join(root, 'docs/config.yml'), '# settings\nport: 8080\nname: "atlas"\n')
+  writeFileSync(join(root, 'docs/deep/compose-stack.yml'), 'services: {}\n')
+  writeFileSync(join(root, 'notes.txt'), 'first line\nsecond line\n')
+  writeFileSync(join(root, 'large.txt'), 'x'.repeat(5000))
+  writeFileSync(join(root, '.hidden-file'), 'hidden\n')
+  writeFileSync(join(root, 'page.html'), '<h1 id="injected">not a page</h1><script>window.__pwned = true</script>\n')
+  writeFileSync(join(root, 'blob.bin'), Buffer.from([0, 1, 2, 3, 0, 255]))
+  // A valid PNG image of 1 x 1 pixel.
+  writeFileSync(
+    join(root, 'photos/pixel.png'),
+    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+  )
+  for (let i = 0; i < BIG_FOLDER_SIZE; i++) {
+    writeFileSync(join(root, 'big', `file-${String(i).padStart(5, '0')}.log`), '')
+  }
 }
 
 async function waitUntilUp(): Promise<void> {

@@ -6,7 +6,7 @@ A desktop for your Linux server, in the browser. Install one small program, open
 - Secure by default: random first password, localhost unless you choose otherwise, all file access confined (see `docs/security/SECURITY.md`).
 - Access it however you like: LAN, reverse proxy, SSH forward, VPN or a tunnel.
 
-**Status:** M2 is done: sign-in, sessions, HTTPS and the desktop (windows, taskbar, search, Settings) work. The file browser (M3) is next. See `docs/ROADMAP.md`.
+**Status:** M3 is done: sign-in, sessions, HTTPS, the desktop, and a read-only file browser with preview, download and search by name. Upload and editing (M4) are next. See `docs/ROADMAP.md`.
 
 | Read | For |
 |---|---|
@@ -26,7 +26,7 @@ Each setting is a command flag or an environment variable. All have defaults.
 | `--tls` | `RACKDESK_TLS` | `auto` | `auto`: HTTPS unless the listen address is loopback. `on`: HTTPS always. `off`: plain HTTP always |
 | `--tls-cert`, `--tls-key` | `RACKDESK_TLS_CERT`, `RACKDESK_TLS_KEY` | not set | Your own certificate and key (PEM). Without them the server makes a self-signed certificate |
 | `--behind-proxy` | `RACKDESK_BEHIND_PROXY` | off | Set it when a reverse proxy with HTTPS forwards requests to RackDesk |
-| `--files-root` | `RACKDESK_FILES_ROOT` | not set | The folder the file browser shows. Not used yet |
+| `--files-root` | `RACKDESK_FILES_ROOT` | `/` | The folder the file browser shows as `/`. Nothing above it can be read |
 
 Lost the admin password? Run `rackdeskd reset-password` on the server. It prints a new random password.
 

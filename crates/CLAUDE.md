@@ -31,6 +31,9 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - A new file operation is a new method on `rd_fs::Root`. It takes the UI path as `&str` and calls `clean_path` first.
 - Use the `cap_std` handle (`self.dir`), never `std::fs` with a joined path. A string check like `starts_with(root)` is not a control.
 - Describe symlinks, don't follow them, unless the operation is meant to and stays beneath the root.
+- A method that opens file content uses `Root::open_file`. It refuses folders, pipes and devices, and checks the type on the open file.
+- File content is sent by `files::download` only. It decides `attachment` or `inline` from a fixed list of types (`inline_type`). Adding a type to that list needs a line in the security plan.
+- A route that takes a path gets a row in the `..` test and the symlink test in `crates/rackdeskd/tests/files.rs`.
 - Each new method gets an escape test: `..`, an absolute path, a symlink pointing outside, and a symlink to `/`. See the tests at the bottom of `crates/rd-fs/src/lib.rs`.
 - Writes go to a temp file on the same filesystem, then `fsync`, then an atomic rename.
 
@@ -51,7 +54,7 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - Don't derive `Debug` on a type that holds a plaintext secret, or write a `Debug` that redacts it.
 
 ## Tests
-- Unit tests live in a `#[cfg(test)] mod tests` at the bottom of the file. Integration tests for `rackdeskd` go in `crates/rackdeskd/tests/` and drive the router in-process. `tests/session.rs` has the helpers (`server()`, `call()`, `sign_in()`).
+- Unit tests live in a `#[cfg(test)] mod tests` at the bottom of the file. Integration tests for `rackdeskd` go in `crates/rackdeskd/tests/` and drive the router in-process. `tests/common/mod.rs` has the helpers (`server()`, `call()`, `sign_in()`, `active_session()`).
 - Use `tempfile::tempdir()` for anything on disk. Never write under the repo or `/tmp` by hand.
 - Unix-only tests get `#[cfg(unix)]`.
 - A security control isn't done until a test fails without it.

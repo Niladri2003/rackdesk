@@ -12,7 +12,7 @@ import type { ShellApi } from './context'
 import { Launcher } from './Launcher'
 import { clearNotices, notify } from './notify'
 import { Rail } from './Rail'
-import type { RailState } from './Rail'
+import type { RailState, RailWindow } from './Rail'
 import { Switcher } from './Switcher'
 import { ConnectionBanner, Toasts } from './Toasts'
 import { Window } from './Window'
@@ -228,6 +228,29 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
   }, [railKey])
   const openLauncher = useCallback(() => setLauncher(true), [])
 
+  // Windows of apps with no fixed place on the taskbar get a button each.
+  // The list is made from a string for the same reason as above.
+  const extraKey = JSON.stringify(
+    state.wins
+      .filter((w) => !RAIL_APPS.includes(w.app))
+      .map((w): RailWindow => {
+        const app = APPS[w.app]
+        return {
+          id: w.id,
+          app: w.app,
+          title: t.window.title(app.name, app.detail?.(w.params) ?? ''),
+          state: w.id === state.focus && !w.min ? 'focused' : 'open',
+        }
+      }),
+  )
+  const extraWindows = useMemo(() => JSON.parse(extraKey) as RailWindow[], [extraKey])
+  const onRailWindow = useCallback((id: number) => {
+    const win = stateRef.current.wins.find((w) => w.id === id)
+    if (!win) return
+    if (stateRef.current.focus === id && !win.min) dispatch({ type: 'minimise', id })
+    else dispatch({ type: 'focus', id })
+  }, [])
+
   const half = Math.round(desk.w / 2)
   const preview =
     snapPreview === 'left'
@@ -242,7 +265,7 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
         {/* While the search dialog or the switcher is open, the desktop
             behind it takes no input and is hidden from screen readers. */}
         <div className="desktop" inert={launcher || switcher !== null}>
-          <Rail states={railStates} onLauncher={openLauncher} onApp={onRailApp} onCloseAutoFocus={onCloseAutoFocus} />
+          <Rail states={railStates} windows={extraWindows} onWindow={onRailWindow} onLauncher={openLauncher} onApp={onRailApp} onCloseAutoFocus={onCloseAutoFocus} />
           <main ref={deskRef} className="desk" aria-label={t.product}>
             {snapPreview && <div className="snap-preview" style={{ ...preview, top: 6, height: desk.h - 12 }} />}
             {state.wins.map((win) => (

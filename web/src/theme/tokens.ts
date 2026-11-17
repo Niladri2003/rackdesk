@@ -56,6 +56,8 @@ export function makeTokens(dark: boolean, accent: Accent, wall: Wallpaper): Reco
       '--warn': 'oklch(0.62 0.14 70)',
       '--danger': 'oklch(0.52 0.18 25)',
       '--danger-soft': 'oklch(0.95 0.03 25)',
+      '--syn-str': 'oklch(0.5 0.12 150)',
+      '--syn-num': 'oklch(0.55 0.14 50)',
       '--scrim': `oklch(0.2 0.02 ${nh} / .28)`,
     }
   }
@@ -86,6 +88,8 @@ export function makeTokens(dark: boolean, accent: Accent, wall: Wallpaper): Reco
     '--warn': 'oklch(0.8 0.13 75)',
     '--danger': 'oklch(0.74 0.15 25)',
     '--danger-soft': 'oklch(0.3 0.06 25)',
+    '--syn-str': 'oklch(0.8 0.12 150)',
+    '--syn-num': 'oklch(0.8 0.12 60)',
     '--scrim': 'rgba(0,0,0,.45)',
   }
 }

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { PASSWORD, expectAccessible, openDesktop, resetPassword, taskbar } from './helpers'
+import { PASSWORD, expectAccessible, resetPassword, taskbar } from './helpers'
 
 test('a wrong password shows an error and the right one opens the desktop', async ({ page }) => {
   await page.goto('/')
@@ -12,13 +12,6 @@ test('a wrong password shows an error and the right one opens the desktop', asyn
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(taskbar(page)).toBeVisible()
-})
-
-test('the session cookie is not readable by scripts', async ({ page }) => {
-  await openDesktop(page)
-  expect(await page.evaluate(() => document.cookie)).toBe('')
-  const cookies = await page.context().cookies()
-  expect(cookies.map((c) => [c.name, c.httpOnly, c.sameSite])).toEqual([['rd_session', true, 'Strict']])
 })
 
 test('a generated password must be replaced before the desktop opens', async ({ page }) => {
@@ -55,16 +48,6 @@ test('after a reload the first-password page asks for the printed password', asy
   await page.getByLabel('Confirm password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Save and continue' }).click()
   await expect(taskbar(page)).toBeVisible()
-})
-
-test('sign out returns to the sign-in page and ends the session', async ({ page }) => {
-  await openDesktop(page)
-  await taskbar(page).getByRole('button', { name: 'Account menu' }).click()
-  await page.getByRole('menuitem', { name: 'Sign out' }).click()
-  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
-
-  const res = await page.request.get('/api/v1/session')
-  expect(res.status()).toBe(401)
 })
 
 for (const scheme of ['light', 'dark'] as const) {

@@ -16,4 +16,9 @@ modified: number | null,
 /**
  * Permission bits, e.g. 0o755 (Unix only).
  */
-mode: number | null, };
+mode: number | null, 
+/**
+ * For a symlink: the kind of the entry it points to. `None` for other
+ * kinds, for a broken link, and for a link that leaves the files root.
+ */
+target: EntryKind | null, };
