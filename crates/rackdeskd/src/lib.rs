@@ -14,10 +14,11 @@ pub mod helper;
 pub mod ids;
 pub mod perms;
 pub mod state;
+pub mod term;
 pub mod tls;
 mod ui;
 
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{header, HeaderValue};
 use axum::routing::{get, patch, post, put};
 use axum::{middleware, Json, Router};
@@ -44,6 +45,8 @@ pub fn router(state: AppState) -> Router {
     // Every other API route needs a session whose password has been changed.
     let protected = Router::new()
         .route("/server", get(server_info))
+        .route("/audit", get(audit::recent))
+        .route("/term", get(term::connect))
         .route("/fs/list", get(files::list))
         .route("/fs/entry", get(files::entry))
         .route("/fs/places", get(files::places))
@@ -125,10 +128,11 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn server_info() -> Json<ServerInfo> {
+async fn server_info(State(state): State<AppState>) -> Json<ServerInfo> {
     Json(ServerInfo {
         hostname: hostname(),
         version: env!("CARGO_PKG_VERSION").into(),
+        terminal: state.config().terminal != term::TermMode::Off,
     })
 }
 

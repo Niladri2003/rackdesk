@@ -69,6 +69,48 @@ fn from_helper(code: &str, message: String) -> ApiErr {
     ApiErr::new(status, code, message)
 }
 
+impl Helper {
+    /// Asks the helper for a shell. The returned socket is the terminal:
+    /// output arrives as raw bytes, and input is sent as stream frames.
+    pub async fn shell(&self, cols: u16, rows: u16) -> Result<tokio::net::UnixStream, ApiErr> {
+        let socket = self.socket.clone();
+        let opened = tokio::task::spawn_blocking(move || -> Result<_, ProtoError> {
+            let mut stream = UnixStream::connect(&socket)?;
+            stream.set_read_timeout(Some(TIMEOUT))?;
+            stream.set_write_timeout(Some(TIMEOUT))?;
+            write_request(&mut stream, &Request::Shell { cols, rows })?;
+            let (response, _) = read_response(&mut stream)?;
+            // From here on the socket is used by the async runtime.
+            stream.set_read_timeout(None)?;
+            stream.set_write_timeout(None)?;
+            stream.set_nonblocking(true)?;
+            Ok((response, stream))
+        })
+        .await
+        .map_err(ApiErr::internal)?;
+        match opened {
+            Ok((Response::Ok, stream)) => {
+                tokio::net::UnixStream::from_std(stream).map_err(ApiErr::internal)
+            }
+            Ok((Response::Error { code, message }, _)) => Err(match code.as_str() {
+                "terminal_off" => ApiErr::new(StatusCode::NOT_FOUND, "terminal_off", message),
+                _ => from_helper(&code, message),
+            }),
+            Ok(_) => Err(ApiErr::internal(
+                "the helper gave an answer that does not fit a shell request",
+            )),
+            Err(e) => {
+                tracing::error!(error = %e, "the helper did not answer");
+                Err(ApiErr::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "helper_unavailable",
+                    "The helper for administrator actions did not answer.",
+                ))
+            }
+        }
+    }
+}
+
 pub fn no_helper() -> ApiErr {
     ApiErr::new(
         StatusCode::BAD_REQUEST,

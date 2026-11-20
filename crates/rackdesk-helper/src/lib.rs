@@ -15,12 +15,18 @@
 //!   the helper was started with. `..` and symlinks can't leave it.
 //! - Only the 9 plain permission bits can be set. No set-uid or set-gid bit.
 //! - Only regular files are read, at most 1 MiB per request.
+//! - A shell is started only as the Linux user that the helper was started
+//!   with (`--shell-user`). A request can't name a user. Without that
+//!   option the helper starts no shell at all, and it starts a root shell
+//!   only with `--allow-root-shell`.
 //! - Every action is written to the log with the id of the calling process.
 //!
 //! What it does not limit: beneath its files root, the helper does what it
 //! is asked. A server that an attacker controls can use it to read any file
 //! there or to change its owner. Start the helper with the smallest files
 //! root that the admin needs.
+
+mod shell;
 
 use rd_fs::{FsError, Root};
 use rd_helper_proto::{
@@ -56,6 +62,28 @@ fn bad_request(message: &str) -> Response {
     }
 }
 
+/// How the helper was started.
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// Only this user id is served.
+    pub allow_uid: u32,
+    /// The Linux user that a terminal runs as. `None`: no terminal.
+    pub shell_user: Option<String>,
+    /// Allows `shell_user` to be root.
+    pub allow_root_shell: bool,
+}
+
+impl Options {
+    /// Serves `allow_uid` and starts no shell.
+    pub fn files_only(allow_uid: u32) -> Self {
+        Self {
+            allow_uid,
+            shell_user: None,
+            allow_root_shell: false,
+        }
+    }
+}
+
 /// Does 1 request. Returns the response and, for `Read`, the bytes.
 pub fn handle(root: &Root, request: &Request) -> (Response, Vec<u8>) {
     let done = |result: Result<(), FsError>| match result {
@@ -83,6 +111,8 @@ pub fn handle(root: &Root, request: &Request) -> (Response, Vec<u8>) {
                 done(root.set_owner(path, *uid, *gid))
             }
         }
+        // A shell takes over the connection. `serve_connection` starts it.
+        Request::Shell { .. } => bad_request("a shell is not a single request"),
         Request::Read { path, offset, len } => {
             if *len > MAX_READ_BYTES {
                 bad_request("the part is larger than 1 MiB")
@@ -145,11 +175,11 @@ fn log(peer_pid: i32, request: &Request, response: &Response) {
     eprintln!("{line}");
 }
 
-fn serve_connection(mut stream: UnixStream, root: &Root, allow_uid: u32) {
+fn serve_connection(mut stream: UnixStream, root: &Root, options: &Options) {
     let _ = stream.set_read_timeout(Some(IDLE_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IDLE_TIMEOUT));
     let peer_pid = match peer_ids(&stream) {
-        Ok((uid, pid)) if uid == allow_uid => pid,
+        Ok((uid, pid)) if uid == options.allow_uid => pid,
         Ok((uid, pid)) => {
             eprintln!(
                 "{}",
@@ -177,6 +207,17 @@ fn serve_connection(mut stream: UnixStream, root: &Root, allow_uid: u32) {
                 return;
             }
         };
+        if let Request::Shell { cols, rows } = request {
+            // The connection is the terminal from here on. It ends when the
+            // shell ends or the server closes it.
+            let outcome = shell::run(stream, options, cols, rows);
+            let result = outcome.as_ref().err().map_or("ok", |e| e.as_str());
+            eprintln!(
+                "{}",
+                serde_json::json!({"helper": "shell", "user": options.shell_user, "pid": peer_pid, "result": result})
+            );
+            return;
+        }
         let (response, data) = handle(root, &request);
         if !matches!(request, Request::Ping) {
             log(peer_pid, &request, &response);
@@ -189,8 +230,9 @@ fn serve_connection(mut stream: UnixStream, root: &Root, allow_uid: u32) {
 
 /// Accepts connections for as long as the process runs. Each connection
 /// gets a thread.
-pub fn serve(listener: UnixListener, root: Root, allow_uid: u32) {
+pub fn serve(listener: UnixListener, root: Root, options: Options) {
     let root = Arc::new(root);
+    let options = Arc::new(options);
     let open = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
@@ -200,8 +242,9 @@ pub fn serve(listener: UnixListener, root: Root, allow_uid: u32) {
         }
         let root = Arc::clone(&root);
         let open = Arc::clone(&open);
+        let options = Arc::clone(&options);
         std::thread::spawn(move || {
-            serve_connection(stream, &root, allow_uid);
+            serve_connection(stream, &root, &options);
             open.fetch_sub(1, Ordering::SeqCst);
         });
     }
@@ -392,7 +435,7 @@ mod tests {
             let socket = base.path().join(name);
             let listener = UnixListener::bind(&socket).unwrap();
             let root = Root::open(&base.path().join("root")).unwrap();
-            std::thread::spawn(move || serve(listener, root, allow_uid));
+            std::thread::spawn(move || serve(listener, root, Options::files_only(allow_uid)));
             let mut stream = UnixStream::connect(&socket).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))

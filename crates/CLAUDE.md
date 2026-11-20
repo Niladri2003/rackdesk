@@ -58,6 +58,12 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - Every helper call is recorded in the audit log with an action name that starts with `helper.`.
 - Code that needs Linux gets `#[cfg(target_os = "linux")]`. Check it with `make test-linux`.
 
+## The terminal
+- `term.rs` owns the shells. Each shell has 1 task (`run_shell`) that reads its output, takes messages on a channel, and ends it.
+- A new way for a session to end must call `state.terminals().stop(...)`, as sign-out and the password change do.
+- A WebSocket route checks the origin itself with `csrf::same_origin`. The CSRF layer covers POST, PUT, PATCH and DELETE only.
+- A test that needs a WebSocket binds a real socket. See `listen()` and `open()` in `tests/common/mod.rs`.
+
 ## The audit log
 - A handler that changes something takes `Extension(actor): Extension<Actor>` and passes its result through `audited()` (`files_write.rs`), or calls `state.audit().record()`.
 - A line holds paths and names. Never a password, a session id or file content.

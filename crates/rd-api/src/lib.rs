@@ -352,6 +352,24 @@ pub struct SessionInfo {
 pub struct ServerInfo {
     pub hostname: String,
     pub version: String,
+    /// True if the terminal app can be used on this server.
+    pub terminal: bool,
+}
+
+/// One line of the audit log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AuditEntry {
+    /// UTC, as "2026-11-17T10:00:00Z".
+    pub time: String,
+    pub user: String,
+    pub ip: String,
+    /// What was done, such as "fs.rename" or "session.sign_in".
+    pub action: String,
+    /// What it was done to.
+    pub target: String,
+    /// "ok", or the error code of a refused or failed request.
+    pub result: String,
 }
 
 /// Every error the API returns has this shape.

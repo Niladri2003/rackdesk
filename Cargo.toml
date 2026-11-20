@@ -28,7 +28,10 @@ thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "sync", "io-util"] }
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
+# Starts a program on a pseudo-terminal, for the terminal app. It has a safe
+# API, so this project needs no unsafe code for it.
+pty-process = "0.5"
 tower-http = { version = "0.7", features = ["set-header", "limit"] }
 # HTTPS: the TLS listener, and the self-signed certificate made on first start.
 # `ring` is the crypto library for both, so the build needs no C toolchain
@@ -59,6 +62,9 @@ tempfile = "3"
 # Tests only: drive the router in-process.
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# Tests only: a WebSocket client for the terminal tests.
+tokio-tungstenite = "0.29"
+futures-util = "0.3"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

@@ -21,7 +21,9 @@ async fn setup() -> (Server, String) {
     let server = server_from(|config| config.helper_socket = Some(socket.clone())).await;
     let root = rd_fs::Root::open(&server.files_root()).unwrap();
     let me = rustix::process::getuid().as_raw();
-    std::thread::spawn(move || rackdesk_helper::serve(listener, root, me));
+    std::thread::spawn(move || {
+        rackdesk_helper::serve(listener, root, rackdesk_helper::Options::files_only(me))
+    });
 
     fs::write(server.files_root().join("secret.conf"), "token = 1").unwrap();
     fs::write(server.dir.path().join("outside.txt"), "outside").unwrap();
@@ -108,4 +110,66 @@ async fn an_elevated_download_sends_the_whole_file() {
         .send(&server)
         .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+/// A terminal whose shell is started by the helper. It needs root, because
+/// the helper switches to the shell user with no password.
+#[tokio::test]
+async fn a_terminal_runs_through_the_helper() {
+    use futures_util::SinkExt;
+    use rackdeskd::term::TermMode;
+    if rustix::process::getuid().as_raw() != 0 {
+        eprintln!("skipped: this test needs root");
+        return;
+    }
+    let socket_dir = tempfile::tempdir().unwrap().keep();
+    let socket = socket_dir.join("helper.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = server_from(|config| {
+        config.helper_socket = Some(socket.clone());
+        config.terminal = TermMode::Helper;
+    })
+    .await;
+    let root = rd_fs::Root::open(&server.files_root()).unwrap();
+    std::thread::spawn(move || {
+        let options = rackdesk_helper::Options {
+            allow_uid: 0,
+            shell_user: Some("root".into()),
+            allow_root_shell: true,
+        };
+        rackdesk_helper::serve(listener, root, options)
+    });
+    let addr = listen(&server).await;
+    let cookie = active_session(&server).await;
+    let origin = format!("http://{addr}");
+
+    let mut window = open(addr, Some(&cookie), Some(&origin), "cols=90&rows=20")
+        .await
+        .unwrap();
+    ready(&mut window).await;
+    type_line(&mut window, "echo via-helper-$((40+2)); stty size").await;
+    let seen = read_until(&mut window, "via-helper-42").await;
+    // The window size reached the shell through the helper.
+    let seen = if seen.contains("20 90") {
+        seen
+    } else {
+        read_until(&mut window, "20 90").await
+    };
+    assert!(seen.contains("20 90"), "{seen}");
+
+    window
+        .send(tokio_tungstenite::tungstenite::Message::Text(
+            "close".into(),
+        ))
+        .await
+        .unwrap();
+    for _ in 0..100 {
+        if server.state.terminals().is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(server.state.terminals().is_empty());
+    let log = fs::read_to_string(server.dir.path().join("audit.log")).unwrap();
+    assert!(log.contains("terminal.open") && log.contains("(helper)"));
 }

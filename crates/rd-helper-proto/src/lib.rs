@@ -12,6 +12,10 @@
 //!   action or an unknown field is an error, not something to ignore.
 //! - The answer to `Read` is a frame with [`Response::Data`], then the raw
 //!   bytes of the file part.
+//! - After `Shell` is answered with `Ok`, the connection is the terminal:
+//!   the helper sends the output of the shell as raw bytes, and the server
+//!   sends stream frames (see [`write_stream_frame`]) with input and with
+//!   new window sizes.
 
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -42,6 +46,10 @@ pub enum Request {
     },
     /// Reads a part of a regular file. `len` is at most [`MAX_READ_BYTES`].
     Read { path: String, offset: u64, len: u32 },
+    /// Starts a login shell on a terminal of `cols` x `rows` characters.
+    /// The Linux user is the one the helper was started with. The request
+    /// can't name another.
+    Shell { cols: u16, rows: u16 },
 }
 
 impl Request {
@@ -53,12 +61,13 @@ impl Request {
             Request::Chmod { .. } => "chmod",
             Request::Chown { .. } => "chown",
             Request::Read { .. } => "read",
+            Request::Shell { .. } => "shell",
         }
     }
 
     pub fn path(&self) -> &str {
         match self {
-            Request::Ping => "",
+            Request::Ping | Request::Shell { .. } => "",
             Request::Stat { path }
             | Request::Chmod { path, .. }
             | Request::Chown { path, .. }
@@ -175,6 +184,63 @@ pub fn write_response(
     Ok(())
 }
 
+/// A frame from the server to the helper while a shell runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamFrame {
+    /// Bytes that the user typed.
+    Input(Vec<u8>),
+    /// A new size of the terminal window, in characters.
+    Resize { cols: u16, rows: u16 },
+}
+
+/// Largest input frame. A paste of more text is sent as several frames.
+pub const MAX_INPUT_BYTES: u32 = 64 * 1024;
+const FRAME_INPUT: u8 = 0;
+const FRAME_RESIZE: u8 = 1;
+
+/// The bytes of 1 stream frame: a type byte, a length of 4 bytes
+/// (big-endian), then the content.
+pub fn encode_stream_frame(frame: &StreamFrame) -> Vec<u8> {
+    let (kind, body): (u8, Vec<u8>) = match frame {
+        StreamFrame::Input(bytes) => (FRAME_INPUT, bytes.clone()),
+        StreamFrame::Resize { cols, rows } => {
+            let mut body = cols.to_be_bytes().to_vec();
+            body.extend_from_slice(&rows.to_be_bytes());
+            (FRAME_RESIZE, body)
+        }
+    };
+    let mut out = Vec::with_capacity(5 + body.len());
+    out.push(kind);
+    out.extend_from_slice(&(body.len() as u32).to_be_bytes());
+    out.extend_from_slice(&body);
+    out
+}
+
+pub fn write_stream_frame(to: &mut impl Write, frame: &StreamFrame) -> Result<(), ProtoError> {
+    to.write_all(&encode_stream_frame(frame))?;
+    to.flush()?;
+    Ok(())
+}
+
+pub fn read_stream_frame(from: &mut impl Read) -> Result<StreamFrame, ProtoError> {
+    let mut head = [0u8; 5];
+    from.read_exact(&mut head)?;
+    let len = u32::from_be_bytes([head[1], head[2], head[3], head[4]]);
+    if len > MAX_INPUT_BYTES {
+        return Err(ProtoError::TooLarge(len));
+    }
+    let mut body = vec![0u8; len as usize];
+    from.read_exact(&mut body)?;
+    match (head[0], body.as_slice()) {
+        (FRAME_INPUT, _) => Ok(StreamFrame::Input(body)),
+        (FRAME_RESIZE, [c0, c1, r0, r1]) => Ok(StreamFrame::Resize {
+            cols: u16::from_be_bytes([*c0, *c1]),
+            rows: u16::from_be_bytes([*r0, *r1]),
+        }),
+        _ => Err(ProtoError::Invalid("unknown stream frame".into())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,6 +262,33 @@ mod tests {
         let mut wire = Vec::new();
         write_request(&mut wire, &request).unwrap();
         assert_eq!(read_request(&mut Cursor::new(wire)).unwrap(), request);
+    }
+
+    #[test]
+    fn stream_frames_survive_the_trip_and_have_a_size_limit() {
+        for frame in [
+            StreamFrame::Input(b"ls -la\n".to_vec()),
+            StreamFrame::Input(Vec::new()),
+            StreamFrame::Resize {
+                cols: 120,
+                rows: 40,
+            },
+        ] {
+            let wire = encode_stream_frame(&frame);
+            assert_eq!(read_stream_frame(&mut Cursor::new(wire)).unwrap(), frame);
+        }
+        let mut too_long = vec![0u8];
+        too_long.extend_from_slice(&(MAX_INPUT_BYTES + 1).to_be_bytes());
+        assert!(matches!(
+            read_stream_frame(&mut Cursor::new(too_long)),
+            Err(ProtoError::TooLarge(_))
+        ));
+        // A resize frame must hold exactly 4 bytes.
+        let bad_resize = vec![1, 0, 0, 0, 2, 0, 80];
+        assert!(matches!(
+            read_stream_frame(&mut Cursor::new(bad_resize)),
+            Err(ProtoError::Invalid(_))
+        ));
     }
 
     #[test]
@@ -278,6 +371,7 @@ mod tests {
             }
             let _ = read_request(&mut Cursor::new(&input));
             let _ = read_response(&mut Cursor::new(&input));
+            let _ = read_stream_frame(&mut Cursor::new(&input));
         }
     }
 }

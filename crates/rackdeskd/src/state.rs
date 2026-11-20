@@ -4,6 +4,7 @@ use crate::audit::AuditLog;
 use crate::error::ApiErr;
 use crate::files_write::Upload;
 use crate::helper::Helper;
+use crate::term::{TermMode, Terminals};
 use rd_auth::limiter::{Limiter, Policy};
 use rd_auth::session::SessionStore;
 use rd_auth::{CredentialStore, Credentials};
@@ -25,6 +26,8 @@ pub struct Config {
     pub data_dir: PathBuf,
     /// The folder the file browser shows as "/".
     pub files_root: PathBuf,
+    /// Who starts the shell of a terminal. `Off`: no terminal.
+    pub terminal: TermMode,
     /// The socket of the root helper. `None`: no action is done as root.
     pub helper_socket: Option<PathBuf>,
     /// Largest file that can be uploaded, in bytes.
@@ -52,6 +55,7 @@ struct Inner {
     searches: Semaphore,
     audit: AuditLog,
     helper: Option<Helper>,
+    terminals: Terminals,
     /// Uploads in progress, by id.
     uploads: std::sync::Mutex<HashMap<String, Upload>>,
     /// Checked when the username is unknown, so that case takes as long as a
@@ -114,6 +118,7 @@ impl AppState {
             searches: Semaphore::new(SEARCHES_AT_ONCE),
             audit,
             helper,
+            terminals: Terminals::default(),
             uploads: std::sync::Mutex::new(HashMap::new()),
             dummy_hash,
         })))
@@ -136,6 +141,11 @@ impl AppState {
     /// The root helper, if this server has one.
     pub fn helper(&self) -> Option<&Helper> {
         self.0.helper.as_ref()
+    }
+
+    /// The running shells of the terminal app.
+    pub fn terminals(&self) -> &Terminals {
+        &self.0.terminals
     }
 
     pub fn audit(&self) -> &AuditLog {
@@ -209,6 +219,7 @@ impl AppState {
             if let Some(creds) = loaded {
                 if creds.password_hash != account.creds.password_hash {
                     self.0.sessions.revoke_all();
+                    self.0.terminals.stop(None);
                     tracing::info!("the credentials file changed; all sessions were ended");
                 }
                 account.creds = creds;

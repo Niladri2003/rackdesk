@@ -25,6 +25,8 @@ rust-embed.workspace = true
 mime_guess.workspace = true
 tokio-util.workspace = true
 rustix.workspace = true
+pty-process = { workspace = true, features = ["async"] }
+futures-util.workspace = true
 axum-server.workspace = true
 rcgen.workspace = true
 rustls-pki-types.workspace = true
@@ -32,6 +34,7 @@ sha2.workspace = true
 time.workspace = true
 
 [dev-dependencies]
+tokio-tungstenite.workspace = true
 rackdesk-helper = { path = "../rackdesk-helper" }
 zip.workspace = true
 tempfile.workspace = true

@@ -130,6 +130,7 @@ pub async fn require_active_session(
     req.extensions_mut().insert(Actor {
         username: authed.username,
         ip,
+        session: authed.session_id,
     });
     Ok(next.run(req).await)
 }
@@ -155,6 +156,7 @@ pub async fn sign_in(
         // The name that was typed. It may not be an account.
         username: login.username.chars().take(64).collect(),
         ip: client_ip(&state, &headers, peer),
+        session: String::new(),
     };
     let ip = actor.ip.to_string();
     let creds = state.credentials().await?;
@@ -212,6 +214,7 @@ pub async fn sign_in(
 pub async fn sign_out(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(id) = session_cookie(&headers, cookie_name(&state)) {
         state.sessions().revoke(id);
+        state.terminals().stop(Some(id));
     }
     // Max-Age=0 makes the browser delete the cookie.
     let cookie = set_cookie(&state, "", 0);
@@ -282,7 +285,10 @@ pub async fn change_password(
     let actor = Actor {
         username: authed.username.clone(),
         ip: client_ip(&state, &headers, peer),
+        session: String::new(),
     };
+    // The password change ended every session, so every terminal stops.
+    state.terminals().stop(None);
     state
         .audit()
         .record(&actor, "session.change_password", "", Ok(()));

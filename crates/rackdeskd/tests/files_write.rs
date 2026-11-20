@@ -626,6 +626,18 @@ async fn changes_and_sign_ins_are_written_to_the_audit_log() {
     find("session.sign_in", "invalid_credentials");
     find("session.change_password", "ok");
 
+    // The view route gives the same lines, newest first, to a session only.
+    let res = call(Method::GET, "/api/v1/audit")
+        .cookie(&cookie)
+        .send(&server)
+        .await;
+    let entries: Vec<rd_api::AuditEntry> = json_body(res).await;
+    assert_eq!(entries.len(), lines.len());
+    assert_eq!(entries[0].action, "session.sign_in");
+    assert_eq!(entries[0].result, "invalid_credentials");
+    let res = call(Method::GET, "/api/v1/audit").send(&server).await;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
     // No password in any form, and only the owner may read the file.
     assert!(!text.contains("a wrong password"));
     assert!(!text.contains(&server.password));

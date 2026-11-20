@@ -21,6 +21,14 @@ struct Args {
     /// served. Find it with `id -u rackdesk`.
     #[arg(long, env = "RACKDESK_HELPER_ALLOW_UID")]
     allow_uid: u32,
+    /// The Linux user that a terminal runs as. Without this option the
+    /// helper starts no shell.
+    #[arg(long, env = "RACKDESK_SHELL_USER")]
+    shell_user: Option<String>,
+    /// Allows --shell-user to be root. A root terminal can do anything on
+    /// the machine.
+    #[arg(long, env = "RACKDESK_ALLOW_ROOT_SHELL")]
+    allow_root_shell: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -58,6 +66,14 @@ fn main() -> anyhow::Result<()> {
         args.allow_uid,
         args.files_root.display()
     );
-    rackdesk_helper::serve(listener, root, args.allow_uid);
+    rackdesk_helper::serve(
+        listener,
+        root,
+        rackdesk_helper::Options {
+            allow_uid: args.allow_uid,
+            shell_user: args.shell_user,
+            allow_root_shell: args.allow_root_shell,
+        },
+    );
     Ok(())
 }
