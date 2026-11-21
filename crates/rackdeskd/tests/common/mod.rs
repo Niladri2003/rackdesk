@@ -36,20 +36,32 @@ pub async fn server() -> Server {
 }
 
 pub async fn server_with(https: bool, behind_proxy: bool) -> Server {
+    server_from(|config| {
+        config.https = https;
+        config.behind_proxy = behind_proxy;
+    })
+    .await
+}
+
+/// A server whose settings are changed by `edit` before it starts.
+pub async fn server_from(edit: impl FnOnce(&mut Config)) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let store = rd_auth::CredentialStore::new(dir.path());
     let (creds, initial) = store.load_or_init().unwrap();
     let files_root = dir.path().join("files");
     std::fs::create_dir(&files_root).unwrap();
-    let config = Config {
+    let mut config = Config {
         data_dir: dir.path().to_owned(),
         files_root: files_root.clone(),
         // Larger than any disk, so a test can ask for more than the free
         // space without reaching this limit first.
         max_upload_bytes: u64::MAX / 4,
-        https,
-        behind_proxy,
+        helper_socket: None,
+        terminal: rackdeskd::term::TermMode::Off,
+        https: false,
+        behind_proxy: false,
     };
+    edit(&mut config);
     let files = rd_fs::Root::open(&files_root).unwrap();
     let state = AppState::new(config, creds, files).await.unwrap();
     Server {
@@ -204,4 +216,91 @@ pub async fn active_session(server: &Server) -> String {
 
 pub async fn bytes_body(res: Response<Body>) -> Vec<u8> {
     res.into_body().collect().await.unwrap().to_bytes().to_vec()
+}
+
+// ---------- The terminal WebSocket ----------
+
+use futures_util::{SinkExt, StreamExt};
+use std::time::Duration;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::{Error, Message};
+
+pub type Socket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+pub async fn listen(server: &Server) -> SocketAddr {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = server
+        .app
+        .clone()
+        .into_make_service_with_connect_info::<SocketAddr>();
+    tokio::spawn(async move { axum::serve(listener, app).await });
+    addr
+}
+
+/// Opens the terminal WebSocket. `origin` is the page that asks for it.
+pub async fn open(
+    addr: SocketAddr,
+    cookie: Option<&str>,
+    origin: Option<&str>,
+    query: &str,
+) -> Result<Socket, Error> {
+    let mut request = format!("ws://{addr}/api/v1/term?{query}")
+        .into_client_request()
+        .unwrap();
+    if let Some(cookie) = cookie {
+        request
+            .headers_mut()
+            .insert("cookie", cookie.parse().unwrap());
+    }
+    if let Some(origin) = origin {
+        request
+            .headers_mut()
+            .insert("origin", origin.parse().unwrap());
+    }
+    tokio_tungstenite::connect_async(request)
+        .await
+        .map(|(socket, _)| socket)
+}
+
+pub fn status_of(result: Result<Socket, Error>) -> StatusCode {
+    match result {
+        Err(Error::Http(response)) => response.status(),
+        Ok(_) => panic!("the terminal opened"),
+        Err(other) => panic!("unexpected error: {other}"),
+    }
+}
+
+/// Reads the `ready` message and returns the terminal id.
+pub async fn ready(socket: &mut Socket) -> String {
+    let message = socket.next().await.unwrap().unwrap();
+    let json: serde_json::Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
+    assert_eq!(json["type"], "ready");
+    json["id"].as_str().unwrap().to_owned()
+}
+
+pub async fn type_line(socket: &mut Socket, line: &str) {
+    let mut bytes = vec![0u8];
+    bytes.extend_from_slice(line.as_bytes());
+    bytes.push(b'\n');
+    socket.send(Message::Binary(bytes.into())).await.unwrap();
+}
+
+/// Reads output until it holds `wanted`, or 10 s have passed.
+pub async fn read_until(socket: &mut Socket, wanted: &str) -> String {
+    let mut seen = String::new();
+    let wait = tokio::time::timeout(Duration::from_secs(10), async {
+        while let Some(Ok(message)) = socket.next().await {
+            if let Message::Binary(bytes) = message {
+                seen.push_str(&String::from_utf8_lossy(&bytes));
+                if seen.contains(wanted) {
+                    break;
+                }
+            }
+        }
+    });
+    let _ = wait.await;
+    assert!(seen.contains(wanted), "wanted {wanted:?} in: {seen}");
+    seen
 }

@@ -6,6 +6,7 @@
 import type { ApiError } from './generated/ApiError'
 import type { DirEntry } from './generated/DirEntry'
 import type { DirListing } from './generated/DirListing'
+import type { EntryDetails } from './generated/EntryDetails'
 import type { PathResult } from './generated/PathResult'
 import type { Places } from './generated/Places'
 import type { SaveResult } from './generated/SaveResult'
@@ -101,6 +102,12 @@ export const api = {
     copy: (from: string, to: string, conflict: Conflict = 'fail') =>
       request<PathResult>('POST', '/api/v1/fs/copy', { from, to, conflict }),
     remove: (path: string) => request<void>('POST', '/api/v1/fs/delete', { path }),
+    properties: (path: string) => request<EntryDetails>('GET', `/api/v1/fs/properties?${new URLSearchParams({ path })}`),
+    chmod: (path: string, mode: number, elevate: boolean) => request<void>('POST', '/api/v1/fs/chmod', { path, mode, elevate }),
+    chown: (path: string, owner: string | null, group: string | null, elevate: boolean) =>
+      request<void>('POST', '/api/v1/fs/chown', { path, owner, group, elevate }),
+    compress: (from: string, to: string) => request<PathResult>('POST', '/api/v1/fs/compress', { from, to, conflict: 'keep_both' }),
+    extract: (from: string, to: string) => request<PathResult>('POST', '/api/v1/fs/extract', { from, to, conflict: 'keep_both' }),
     trash: (path: string) => request<void>('POST', '/api/v1/fs/trash', { path }),
     trashList: () => request<TrashItem[]>('GET', '/api/v1/fs/trash'),
     trashRestore: (id: string, conflict: Conflict = 'fail') =>
@@ -146,6 +153,13 @@ export function fileUrl(path: string, inline = false): string {
   if (inline) params.set('inline', 'true')
   return `/api/v1/fs/download?${params}`
 }
+
+/** The address that downloads a file through the root helper. For a file
+ * that the server itself may not read. */
+export const elevatedFileUrl = (path: string) => `/api/v1/fs/download?${new URLSearchParams({ path, elevate: 'true' })}`
+
+/** The address that sends a file or a folder as a zip archive. */
+export const zipUrl = (path: string) => `/api/v1/fs/zip?${new URLSearchParams({ path })}`
 
 /** Reads the start of a file as bytes, for a text preview. An empty file
  * gives an empty array. `total` is the full size of the file in bytes. */

@@ -92,6 +92,26 @@ fn write_routes() -> Vec<(Method, &'static str, Value)> {
         (Method::POST, "/api/v1/fs/trash/empty", json!({})),
         (
             Method::POST,
+            "/api/v1/fs/chmod",
+            json!({"path": "/notes.txt", "mode": 0o600}),
+        ),
+        (
+            Method::POST,
+            "/api/v1/fs/chown",
+            json!({"path": "/notes.txt", "group": "0"}),
+        ),
+        (
+            Method::POST,
+            "/api/v1/fs/compress",
+            json!({"from": "/docs", "to": "/docs.zip"}),
+        ),
+        (
+            Method::POST,
+            "/api/v1/fs/extract",
+            json!({"from": "/docs.zip", "to": "/out"}),
+        ),
+        (
+            Method::POST,
             "/api/v1/fs/uploads",
             json!({"dir": "/", "name": "up.bin", "size": 4}),
         ),
@@ -214,6 +234,26 @@ async fn paths_that_leave_the_root_are_refused_and_change_nothing() {
             json!({"id": "../../outside.txt"}),
         ),
         ("/api/v1/fs/trash/delete", json!({"id": "../info"})),
+        (
+            "/api/v1/fs/compress",
+            json!({"from": "/docs", "to": "/../docs.zip"}),
+        ),
+        (
+            "/api/v1/fs/compress",
+            json!({"from": "/..", "to": "/all.zip"}),
+        ),
+        (
+            "/api/v1/fs/chmod",
+            json!({"path": "/../outside.txt", "mode": 0o777}),
+        ),
+        (
+            "/api/v1/fs/chown",
+            json!({"path": "/../outside.txt", "group": "0"}),
+        ),
+        (
+            "/api/v1/fs/extract",
+            json!({"from": "/../x.zip", "to": "/out"}),
+        ),
         (
             "/api/v1/fs/uploads",
             json!({"dir": "/..", "name": "up.bin", "size": 1}),
@@ -540,4 +580,123 @@ async fn trash_then_restore_through_the_api() {
         fs::read_to_string(server.files_root().join("docs/guide.md")).unwrap(),
         "guide"
     );
+}
+
+#[tokio::test]
+async fn changes_and_sign_ins_are_written_to_the_audit_log() {
+    let (server, cookie) = setup().await;
+    post(
+        &server,
+        &cookie,
+        "/api/v1/fs/rename",
+        json!({"from": "/notes.txt", "to": "/n.txt"}),
+    )
+    .await;
+    post(
+        &server,
+        &cookie,
+        "/api/v1/fs/delete",
+        json!({"path": "/../outside.txt"}),
+    )
+    .await;
+    sign_in_call("a wrong password").send(&server).await;
+
+    let path = server.dir.path().join("audit.log");
+    let text = fs::read_to_string(&path).unwrap();
+    let lines: Vec<Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let find = |action: &str, result: &str| {
+        lines
+            .iter()
+            .find(|l| l["action"] == action && l["result"] == result)
+            .unwrap_or_else(|| panic!("no line for {action} {result} in:\n{text}"))
+    };
+    let rename = find("fs.rename", "ok");
+    assert_eq!(rename["target"], "/notes.txt -> /n.txt");
+    assert_eq!(rename["user"], "admin");
+    assert_eq!(rename["ip"], "10.0.0.1");
+    // A refused change is recorded too, with its error code.
+    assert_eq!(
+        find("fs.delete", "invalid_path")["target"],
+        "/../outside.txt"
+    );
+    find("session.sign_in", "ok");
+    find("session.sign_in", "invalid_credentials");
+    find("session.change_password", "ok");
+
+    // The view route gives the same lines, newest first, to a session only.
+    let res = call(Method::GET, "/api/v1/audit")
+        .cookie(&cookie)
+        .send(&server)
+        .await;
+    let entries: Vec<rd_api::AuditEntry> = json_body(res).await;
+    assert_eq!(entries.len(), lines.len());
+    assert_eq!(entries[0].action, "session.sign_in");
+    assert_eq!(entries[0].result, "invalid_credentials");
+    let res = call(Method::GET, "/api/v1/audit").send(&server).await;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    // No password in any form, and only the owner may read the file.
+    assert!(!text.contains("a wrong password"));
+    assert!(!text.contains(&server.password));
+    assert!(!text.contains(NEW_PASSWORD));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn chmod_sets_plain_bits_and_root_actions_need_a_helper() {
+    use std::os::unix::fs::PermissionsExt;
+    let (server, cookie) = setup().await;
+    let file = server.files_root().join("notes.txt");
+    let mode = || fs::metadata(&file).unwrap().permissions().mode() & 0o7777;
+
+    let res = post(
+        &server,
+        &cookie,
+        "/api/v1/fs/chmod",
+        json!({"path": "/notes.txt", "mode": 0o640}),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert_eq!(mode(), 0o640);
+
+    // The set-uid bit is refused.
+    let res = post(
+        &server,
+        &cookie,
+        "/api/v1/fs/chmod",
+        json!({"path": "/notes.txt", "mode": 0o4755}),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(mode(), 0o640);
+
+    // This test server has no helper. Nothing is done as root.
+    let res = post(
+        &server,
+        &cookie,
+        "/api/v1/fs/chmod",
+        json!({"path": "/notes.txt", "mode": 0o600, "elevate": true}),
+    )
+    .await;
+    assert_eq!(error_code(res).await, "no_helper");
+    let res = call(
+        Method::GET,
+        "/api/v1/fs/download?path=/notes.txt&elevate=true",
+    )
+    .cookie(&cookie)
+    .send(&server)
+    .await;
+    assert_eq!(error_code(res).await, "no_helper");
+    assert_eq!(mode(), 0o640);
 }

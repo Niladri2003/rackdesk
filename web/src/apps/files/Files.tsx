@@ -1,24 +1,26 @@
 // The file browser. It reads folders through /api/v1/fs and never changes
 // anything on the server.
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, CircleAlert, ClipboardPaste, Copy, CopyPlus, Download, Eye, EyeOff, FilePlus, FolderOpen, FolderPlus, LayoutGrid, List, Pencil, Scissors, Search, Star, TextCursorInput, Trash2, Upload } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, CircleAlert, ClipboardPaste, FileArchive, Info, PackageOpen, Copy, CopyPlus, Download, Eye, EyeOff, FilePlus, FolderOpen, FolderPlus, LayoutGrid, List, Pencil, Scissors, Search, Star, TextCursorInput, Trash2, Upload } from 'lucide-react'
 import { ContextMenu } from 'radix-ui'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { DragEvent, KeyboardEvent } from 'react'
-import { api, ApiFailure, fileUrl } from '../../api/client'
+import { api, ApiFailure, fileUrl, zipUrl } from '../../api/client'
 import type { DirEntry } from '../../api/generated/DirEntry'
 import type { Places } from '../../api/generated/Places'
 import type { SortKey } from '../../api/generated/SortKey'
 import { errorText, t } from '../../i18n'
 import { useShell } from '../../shell/context'
+import { showPanel } from '../../shell/dialog'
 import { startUploads } from '../../shell/transfers'
 import type { AppProps } from '../registry'
-import { duplicateEntry, newFile, newFolder, pasteInto, renameEntry, setClip, trashEntry, useClip } from './actions'
+import { compressEntry, duplicateEntry, extractEntry, newFile, newFolder, pasteInto, renameEntry, setClip, trashEntry, useClip } from './actions'
 import { TRASH, useFolderChanges } from './changes'
 import { useFavourites } from './favourites'
 import { kindOf } from './kinds'
 import { baseName, crumbs, formatSize, formatTime, joinPath, normalisePath, parentPath } from './paths'
 import { Sidebar } from './Sidebar'
 import { TrashView } from './TrashView'
+import { Properties } from './Properties'
 import { useListing } from './useListing'
 import { useRowWindow } from './useRowWindow'
 
@@ -33,11 +35,12 @@ const SORTS: SortKey[] = ['name', 'size', 'modified']
 const MAX_EDIT_BYTES = 2 * 1024 * 1024
 const f = t.files
 
-/** Starts a download of a file through the browser. */
-function download(path: string) {
+/** Starts a download through the browser: a file as it is, a folder as a
+ * zip archive that the server makes while it sends it. */
+function download(path: string, asZip = false) {
   const link = document.createElement('a')
-  link.href = fileUrl(path)
-  link.download = baseName(path)
+  link.href = asZip ? zipUrl(path) : fileUrl(path)
+  link.download = asZip ? `${baseName(path)}.zip` : baseName(path)
   link.click()
 }
 
@@ -529,10 +532,19 @@ export function Files({ params, setParams }: AppProps) {
                       {f.open}
                     </ContextMenu.Item>
                   )}
-                  {selectedIsFile && (
-                    <ContextMenu.Item className="menu-item" onSelect={() => download(selectedPath)}>
-                      <Download size={15} aria-hidden="true" />
-                      {f.download}
+                  <ContextMenu.Item className="menu-item" onSelect={() => download(selectedPath, !selectedIsFile)}>
+                    <Download size={15} aria-hidden="true" />
+                    {selectedIsFile ? f.download : f.downloadZip}
+                  </ContextMenu.Item>
+                  {selectedIsFile && /\.zip$/i.test(selectedEntry.name) ? (
+                    <ContextMenu.Item className="menu-item" onSelect={() => void extractEntry(path, selectedEntry.name)}>
+                      <PackageOpen size={15} aria-hidden="true" />
+                      {f.extract}
+                    </ContextMenu.Item>
+                  ) : (
+                    <ContextMenu.Item className="menu-item" onSelect={() => void compressEntry(path, selectedEntry.name)}>
+                      <FileArchive size={15} aria-hidden="true" />
+                      {f.compress}
                     </ContextMenu.Item>
                   )}
                   <ContextMenu.Separator className="menu-separator" />
@@ -555,6 +567,13 @@ export function Files({ params, setParams }: AppProps) {
                     <TextCursorInput size={15} aria-hidden="true" />
                     {f.rename}
                     <span className="menu-kbd">F2</span>
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    className="menu-item"
+                    onSelect={() => showPanel(f.propertiesOf(selectedEntry.name), (close) => <Properties path={selectedPath} close={close} />)}
+                  >
+                    <Info size={15} aria-hidden="true" />
+                    {f.properties}
                   </ContextMenu.Item>
                   <ContextMenu.Item className="menu-item danger" onSelect={() => void trashEntry(path, selectedEntry.name)}>
                     <Trash2 size={15} aria-hidden="true" />
@@ -598,12 +617,10 @@ export function Files({ params, setParams }: AppProps) {
                     {f.open}
                   </button>
                 )}
-                {selectedIsFile && (
-                  <button type="button" className="btn btn-small" onClick={() => download(selectedPath)}>
-                    <Download size={14} aria-hidden="true" />
-                    {f.download}
-                  </button>
-                )}
+                <button type="button" className="btn btn-small" onClick={() => download(selectedPath, !selectedIsFile)}>
+                  <Download size={14} aria-hidden="true" />
+                  {selectedIsFile ? f.download : f.downloadZip}
+                </button>
                 <button type="button" className="btn btn-small" onClick={() => void renameEntry(path, selectedEntry.name)}>
                   {f.rename}
                 </button>

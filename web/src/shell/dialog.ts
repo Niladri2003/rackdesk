@@ -1,6 +1,7 @@
 // Questions the shell asks the user: a choice between a few answers, or 1
 // line of text. `choose` and `askText` return a promise with the answer, so
 // the calling code reads top to bottom.
+import type { ReactNode } from 'react'
 import { createStore, useStore } from '../lib/store'
 
 export interface Choice<T> {
@@ -10,6 +11,8 @@ export interface Choice<T> {
 }
 
 export type Question =
+  /** A dialog with content of its own, such as the properties of a file. */
+  | { type: 'panel'; title: string; render: (close: () => void) => ReactNode; answer: (value: null) => void }
   | { type: 'choose'; title: string; body: string; choices: Choice<unknown>[]; answer: (value: unknown) => void }
   | {
       type: 'text'
@@ -49,6 +52,13 @@ export function choose<T>(title: string, body: string, choices: Choice<T>[]): Pr
       },
     })
   })
+}
+
+/** Shows a dialog whose content the caller draws. `render` gets a function
+ * that closes it. */
+export function showPanel(title: string, render: (close: () => void) => ReactNode): void {
+  dismissQuestion()
+  store.set({ type: 'panel', title, render, answer: () => store.set(null) })
 }
 
 /** Asks for 1 line of text. Resolves to the trimmed text, or to null. */

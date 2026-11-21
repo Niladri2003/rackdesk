@@ -9,16 +9,21 @@
 //! On top of that, [`clean_path`] rejects odd input early (NUL bytes,
 //! backslashes, `..` components), so errors are clear and logs are readable.
 
+mod archive;
+mod perms;
 mod search;
 mod trash;
 mod write;
 
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
-use rd_api::{DirEntry, DirListing, EntryKind, SortKey};
+pub use rd_api::EntryKind;
+use rd_api::{DirEntry, DirListing, SortKey};
 use std::io;
 use std::path::{Path, PathBuf};
 
+pub use archive::ArchiveLimits;
+pub use perms::PLAIN_BITS;
 pub use search::SearchLimits;
 pub use write::MAX_COPY_ENTRIES;
 
@@ -43,8 +48,10 @@ pub enum FsError {
     ChangedOnDisk,
     #[error("the target is on another disk")]
     CrossDevice,
-    #[error("too many entries")]
+    #[error("too many entries, or too many bytes")]
     TooMany,
+    #[error("the archive can't be read: {0}")]
+    BadArchive(&'static str),
     /// An upload chunk does not start where the file ends. Holds the size
     /// the file has now.
     #[error("the chunk does not start at the end of the file")]
@@ -66,6 +73,7 @@ impl FsError {
             FsError::ChangedOnDisk => "changed_on_disk",
             FsError::CrossDevice => "cross_device",
             FsError::TooMany => "too_many",
+            FsError::BadArchive(_) => "bad_archive",
             FsError::OffsetMismatch(_) => "offset_mismatch",
             FsError::Io(_) => "io_error",
         }

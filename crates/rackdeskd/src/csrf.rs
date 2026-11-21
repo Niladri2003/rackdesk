@@ -22,7 +22,7 @@ pub async fn reject_cross_site(req: Request, next: Next) -> Response {
 
 /// `uri_authority` is the host and port from the request line. HTTP/2 sends
 /// it there in place of a `Host` header.
-fn same_origin(headers: &HeaderMap, uri_authority: Option<&str>) -> bool {
+pub fn same_origin(headers: &HeaderMap, uri_authority: Option<&str>) -> bool {
     // Browsers set `Sec-Fetch-Site` themselves. Page scripts can't change it.
     if let Some(site) = headers.get("sec-fetch-site") {
         return site.as_bytes() == b"same-origin";

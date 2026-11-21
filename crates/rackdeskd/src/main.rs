@@ -5,6 +5,7 @@
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use rackdeskd::term::TermMode;
 use rackdeskd::tls::{self, TlsMode};
 use rackdeskd::{AppState, Config};
 use std::net::SocketAddr;
@@ -28,6 +29,15 @@ struct Args {
     /// The folder the file browser shows as "/". Nothing above it can be read.
     #[arg(long, env = "RACKDESK_FILES_ROOT", default_value = "/")]
     files_root: PathBuf,
+    /// Who starts the shell of the terminal app. "off": no terminal.
+    /// "helper": rackdesk-helper starts it, as the user it was configured
+    /// with. "direct": this program starts it, as its own user.
+    #[arg(long, env = "RACKDESK_TERMINAL", value_enum, default_value = "off")]
+    terminal: TermMode,
+    /// The socket of rackdesk-helper, for actions that need root. Without
+    /// it, no action is done as root.
+    #[arg(long, env = "RACKDESK_HELPER_SOCKET")]
+    helper_socket: Option<PathBuf>,
     /// Largest file that can be uploaded, in bytes. The default is 20 GiB.
     #[arg(long, env = "RACKDESK_MAX_UPLOAD_BYTES", default_value_t = 20 * 1024 * 1024 * 1024)]
     max_upload_bytes: u64,
@@ -97,6 +107,13 @@ async fn main() -> anyhow::Result<()> {
             .context("setting the trash folder")?;
     }
 
+    #[cfg(unix)]
+    if rustix::process::geteuid().as_raw() == 0 {
+        tracing::warn!(
+            "rackdeskd is running as root. Run it as a user with no special rights, and use rackdesk-helper for actions that need root"
+        );
+    }
+
     let loopback = args.listen.ip().is_loopback();
     let use_tls = match args.tls {
         TlsMode::On => true,
@@ -115,6 +132,8 @@ async fn main() -> anyhow::Result<()> {
             data_dir: args.data_dir.clone(),
             files_root,
             max_upload_bytes: args.max_upload_bytes,
+            helper_socket: args.helper_socket.clone(),
+            terminal: args.terminal,
             https: use_tls || args.behind_proxy,
             behind_proxy: args.behind_proxy,
         },

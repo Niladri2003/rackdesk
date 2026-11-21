@@ -1,11 +1,18 @@
 [workspace]
 resolver = "2"
-members = ["crates/rd-api", "crates/rd-fs", "crates/rd-auth", "crates/rackdeskd"]
+members = [
+    "crates/rd-api",
+    "crates/rd-fs",
+    "crates/rd-auth",
+    "crates/rd-helper-proto",
+    "crates/rackdesk-helper",
+    "crates/rackdeskd",
+]
 
 [workspace.package]
 version = "0.0.1"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "Apache-2.0"
 # These crates are parts of one program. They are not published to crates.io.
 publish = false
@@ -14,13 +21,17 @@ publish = false
 rd-api = { path = "crates/rd-api" }
 rd-fs = { path = "crates/rd-fs" }
 rd-auth = { path = "crates/rd-auth" }
+rd-helper-proto = { path = "crates/rd-helper-proto" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "sync", "io-util"] }
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
+# Starts a program on a pseudo-terminal, for the terminal app. It has a safe
+# API, so this project needs no unsafe code for it.
+pty-process = "0.5"
 tower-http = { version = "0.7", features = ["set-header", "limit"] }
 # HTTPS: the TLS listener, and the self-signed certificate made on first start.
 # `ring` is the crypto library for both, so the build needs no C toolchain
@@ -30,16 +41,19 @@ rcgen = "0.14"
 rustls-pki-types = "1"
 # SHA-256 fingerprint of the certificate, printed at start.
 sha2 = "0.11"
-time = "0.3"
+time = { version = "0.3", features = ["formatting"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ts-rs = "12"
 cap-std = "4"
 # Free and total space of a filesystem (statvfs), through a safe API. cap-std
 # already depends on it.
-rustix = { version = "1", features = ["fs", "process"] }
+rustix = { version = "1", features = ["fs", "process", "net"] }
 # Turns a file into a response body that is sent in chunks.
-tokio-util = { version = "0.7", features = ["io"] }
+tokio-util = { version = "0.7", features = ["io", "io-util"] }
+# Zip archives. Only the deflate method, with a pure Rust backend, so the
+# build needs no C code for it.
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 argon2 = "0.5"
 getrandom = "0.3"
 rust-embed = "8"
@@ -48,6 +62,9 @@ tempfile = "3"
 # Tests only: drive the router in-process.
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# Tests only: a WebSocket client for the terminal tests.
+tokio-tungstenite = "0.29"
+futures-util = "0.3"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
