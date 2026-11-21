@@ -1,0 +1,15 @@
+---
+// The install command in a box, with a button that copies it.
+// `id` must be different for each box on a page.
+import { INSTALL_COMMAND } from '../site.ts'
+
+interface Props {
+  id: string
+}
+const { id } = Astro.props
+---
+
+<div class="cmd">
+  <code id={id}>{INSTALL_COMMAND}</code>
+  <button type="button" class="copy" data-copy={id}>Copy</button>
+</div>

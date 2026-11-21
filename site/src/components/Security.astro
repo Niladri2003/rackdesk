@@ -1,0 +1,49 @@
+---
+// The server and the helper as a diagram, and the list of controls.
+---
+
+<section class="band" id="security">
+  <h2>The part that faces the network has no root rights.</h2>
+  <p class="sub">RackDesk is 2 programs. The server talks to your browser and runs as a normal user. A small helper runs as root and does a fixed list of 5 actions. A bug in the server can't run commands as root.</p>
+  <div class="split">
+    <div>
+      <div class="flow tall" id="flow" aria-hidden="true">
+    <div class="node">
+      <span class="node-name">Your browser</span>
+      <span class="node-sub">signed in</span>
+    </div>
+    <div class="link"><span class="link-label">HTTPS</span><i class="pkt"></i></div>
+    <div class="node node-server">
+      <span class="node-name">rackdeskd</span>
+      <span class="node-sub">normal user, no root</span>
+    </div>
+    <div class="link"><span class="link-label">local socket</span><i class="pkt"></i></div>
+    <div class="node node-helper">
+      <span class="node-name">rackdesk-helper</span>
+      <span class="node-sub">root, 5 actions only</span>
+      <span class="acts">
+        <span>read file details</span>
+        <span>change permissions</span>
+        <span>change owner</span>
+        <span>read a protected file</span>
+        <span>start a terminal shell</span>
+      </span>
+    </div>
+    <p class="flow-log">
+      <span class="flow-req" id="flow-req">Change the owner of /srv/app</span>
+      <span class="flow-res" id="flow-res">Done. Written to the audit log.</span>
+    </p>
+  </div>
+    </div>
+    <ul class="checks">
+      <li><h3>No default password</h3><p>A random 20-character password is made at the first start and shown once.</p></li>
+      <li><h3>Local address only</h3><p>It listens on 127.0.0.1 until you set another address.</p></li>
+      <li><h3>HTTPS on every other address</h3><p>With your certificate, or one the server makes.</p></li>
+      <li><h3>Password guessing is slowed down</h3><p>Failed sign-ins lock the address and the account.</p></li>
+      <li><h3>File access stays in one folder</h3><p>No path and no symlink leads outside it.</p></li>
+      <li><h3>The helper has no network port</h3><p>It answers 1 Linux user on a socket file.</p></li>
+      <li><h3>The terminal is off until you turn it on</h3><p>You choose which Linux user its shells run as.</p></li>
+      <li><h3>Every change is logged</h3><p>Never a password, a typed command or file content.</p></li>
+    </ul>
+  </div>
+</section>

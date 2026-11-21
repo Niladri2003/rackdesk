@@ -1,0 +1,73 @@
+---
+// The top of the page: headline, install command, and the start sequence.
+// The sequence shows screenshots of RackDesk. They are converted here to
+// WebP in 2 widths. The script reads their addresses from `data-frames`.
+import { getImage } from 'astro:assets'
+import InstallCommand from './InstallCommand.astro'
+
+// In the order in which the sequence shows them. The last one in LAST is
+// also the picture that shows without the script.
+const NAMES = ['signin', 'desk', 'files-0', 'files-1', 'files-2', 'term-0', 'term-1', 'search-0', 'search-1']
+const LAST = 'term-1'
+const WIDTHS = [1200, 2160]
+// The picture is at most 1140 px wide on the page.
+const SIZES = '(min-width: 1220px) 1140px, 100vw'
+
+const files = import.meta.glob<{ default: ImageMetadata }>('../assets/shots/*.jpg', { eager: true })
+const frames: Record<string, { src: string; srcset: string; width: number; height: number }> = {}
+for (const name of NAMES) {
+  const source = files[`../assets/shots/${name}.jpg`].default
+  const image = await getImage({ src: source, format: 'webp', quality: 82, widths: WIDTHS })
+  frames[name] = {
+    src: image.src,
+    srcset: image.srcSet.attribute,
+    width: source.width,
+    height: source.height,
+  }
+}
+const last = frames[LAST]
+---
+
+<section class="hero" id="top">
+  <p class="pill"><i></i>Open source. Apache-2.0. No telemetry.</p>
+  <h1>Your Linux server, as a desktop in the browser.</h1>
+  <p class="lead">Install one small program. Open a browser, sign in, and manage the server with windows and apps instead of SSH.</p>
+  <InstallCommand id="install-cmd" />
+
+  <!-- The start sequence. A drawn pointer clicks Copy, the command is
+       pasted in the terminal, the output prints, the browser opens,
+       and the pointer signs in and opens Files, the Terminal and search. Without the script, with reduced motion and on a
+       small screen, the finished picture shows. -->
+  <span class="pointer" id="pointer" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M5 3l14 8.2-6.1 1.5 3.6 6.5-2.7 1.5-3.6-6.5L5 18.6z" /></svg>
+  </span>
+
+  <div class="stage" id="stage">
+    <div class="floor" aria-hidden="true"></div>
+    <div class="layers">
+      <div class="shell" aria-hidden="true">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="bar-name">ssh admin@server</span></div>
+        <div class="shell-body" id="shell">
+          <p class="in"><span class="ps">admin@server:~$</span> <span class="pasted">curl -fsSL https://github.com/Niladri2003/rackdesk/releases/latest/download/install.sh | sh</span><i class="caret"></i></p>
+          <p class="o">Checking the release signature <b>ok</b></p>
+          <p class="o">Installing rackdeskd <b>ok</b></p>
+          <p class="o">Starting the service <b>ok</b></p>
+          <p class="o gap ind">RackDesk admin account created</p>
+          <p class="o ind">username: admin</p>
+          <p class="o ind">password: Tq7mPz4KxW9cLb2RvN8s</p>
+          <p class="o ind">You'll be asked to change it at the next sign-in.</p>
+          <p class="o gap">rackdeskd listening on <u id="shell-url">http://127.0.0.1:7171</u></p>
+        </div>
+      </div>
+
+      <div class="view">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="bar-url">http://127.0.0.1:7171</span></div>
+        <div class="view-body" id="view" data-frames={JSON.stringify(frames)} data-sizes={SIZES}>
+          <img class="shot" src={last.src} srcset={last.srcset} sizes={SIZES} width={last.width} height={last.height} decoding="async" alt="RackDesk in a browser. A Files window shows the folder /etc/nginx. A Terminal window shows a command and its output." />
+          <span class="typed" id="typed" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="again" id="again" hidden>Skip</button>
+  </div>
+</section>

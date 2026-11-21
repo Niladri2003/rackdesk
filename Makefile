@@ -1,7 +1,7 @@
 # RackDesk development commands. Run `make` or `make help` to list them.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run web build check fmt fmt-check clippy test web-check e2e test-linux deny new-password clean
+.PHONY: help setup run web site site-build build check fmt fmt-check clippy test web-check e2e test-linux deny new-password clean
 
 DATA_DIR ?= ./dev-data
 
@@ -11,11 +11,17 @@ help: ## List the commands
 setup: ## Install the web UI packages
 	cd web && npm ci
 
-run: ## Start the server on 127.0.0.1:7171
-	cargo run -p rackdeskd -- --data-dir $(DATA_DIR)
+run: ## Start the server on 127.0.0.1:7171, with the terminal running as your own user
+	cargo run -p rackdeskd -- --data-dir $(DATA_DIR) --terminal direct
 
 web: ## Start the UI dev server on :5173 (needs `make run` in another terminal)
 	cd web && npm run dev
+
+site: ## Start the landing page dev server on :8100
+	cd site && npm install && npm run dev
+
+site-build: ## Build the landing page into site/dist, as Netlify does
+	cd site && npm ci && npm run build
 
 build: ## Build the release binary with the UI inside it
 	cd web && npm run build
@@ -55,4 +61,4 @@ new-password: ## Delete the dev account, so the next `make run` prints a new pas
 
 clean: ## Delete build output
 	cargo clean
-	rm -rf web/dist
+	rm -rf web/dist site/dist site/.astro

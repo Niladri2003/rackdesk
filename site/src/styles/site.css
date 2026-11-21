@@ -1,0 +1,1379 @@
+/* The RackDesk landing page: dark, centred, with coloured light behind the
+   page, a start sequence from the install command to the desktop, and glass
+   cards. */
+
+@font-face {
+  font-family: 'Onest';
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/Onest.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/GeistMono.woff2') format('woff2');
+}
+
+:root {
+  --font-ui: 'Onest', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --pitch: 28px;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 76px;
+}
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+dl,
+dd,
+pre {
+  margin: 0;
+  padding: 0;
+}
+ul,
+ol {
+  list-style: none;
+}
+:focus-visible {
+  outline: 2px solid var(--dot);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.mark {
+  width: 26px;
+  height: 26px;
+  fill: var(--dot);
+}
+.mark .led {
+  fill: var(--led);
+}
+.mark .dim {
+  opacity: 0.4;
+}
+
+.wordmark {
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.wordmark b {
+  font-weight: 650;
+}
+
+
+.cmd {
+  display: flex;
+  align-items: stretch;
+  max-width: 900px;
+  margin-top: 32px;
+  background: var(--term);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.cmd code {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.cmd code::before {
+  content: '$ ';
+  color: var(--led);
+}
+.copy {
+  flex: none;
+  min-width: 84px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--ground);
+  background: var(--dot);
+  border: 0;
+  border-radius: 0 9px 9px 0;
+  cursor: pointer;
+}
+.copy:hover {
+  background: var(--text);
+}
+.copy.done {
+  background: var(--led);
+}
+
+.cmd-note {
+  margin-top: 14px;
+  font-size: 15px;
+  color: var(--soft);
+}
+
+/* ---------- The server and the helper ---------- */
+
+.flow {
+  --bad: #ff7a85;
+  display: grid;
+  grid-template-columns: auto minmax(60px, 1fr) auto minmax(60px, 1fr) auto;
+  align-items: center;
+  margin-top: clamp(32px, 5vw, 56px);
+  padding: clamp(20px, 4vw, 44px);
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--dot) 10%, transparent) 1.4px, transparent 2px) 0 0 / var(--pitch) var(--pitch),
+    var(--tile);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.node-name {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--text);
+}
+.node-sub {
+  font-size: 13.5px;
+  color: var(--soft);
+}
+.node-helper {
+  border-color: var(--ink);
+}
+.acts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 10px;
+  font-size: 13px;
+  color: var(--soft);
+  border-top: 1px solid var(--line);
+}
+.acts span::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 8px;
+  vertical-align: 2px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+.link {
+  position: relative;
+  height: 1px;
+  background: var(--line);
+}
+.link-label {
+  position: absolute;
+  left: 50%;
+  bottom: 9px;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  color: var(--soft);
+  white-space: nowrap;
+}
+.pkt {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--dot) 70%, transparent);
+  opacity: 0;
+}
+.flow-log {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: clamp(20px, 3vw, 32px);
+  padding-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  border-top: 1px solid var(--line);
+}
+.flow-req::before {
+  content: 'request: ';
+  color: var(--soft);
+}
+.flow-res {
+  color: var(--led);
+}
+.flow.no .flow-res {
+  color: var(--bad);
+}
+
+/* One request: a dot travels to the server, then to the helper, and the
+   helper shows the result. The script adds "run" again for each request. */
+.flow.run .link:nth-of-type(2) .pkt {
+  animation: travel 1200ms 100ms ease-in-out both;
+}
+.flow.run .link:nth-of-type(4) .pkt {
+  animation: travel 1200ms 1400ms ease-in-out both;
+}
+.flow.run .node-server {
+  animation: touch 500ms 1250ms ease-out;
+}
+.flow.run .node-helper {
+  animation: accept 900ms 2550ms ease-out;
+}
+.flow.run.no .node-helper {
+  animation: refuse 900ms 2550ms ease-out;
+}
+.flow.run .flow-res {
+  animation: appear 300ms 2600ms ease-out both;
+}
+@keyframes travel {
+  0% {
+    left: 0;
+    top: 0;
+    opacity: 0;
+  }
+  12%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    left: var(--end-x, 100%);
+    top: var(--end-y, 0);
+    opacity: 0;
+  }
+}
+@keyframes touch {
+  40% {
+    border-color: var(--dot);
+  }
+}
+@keyframes accept {
+  30% {
+    border-color: var(--led);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--led) 22%, transparent);
+  }
+}
+@keyframes refuse {
+  20% {
+    border-color: var(--bad);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 22%, transparent);
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+    border-color: var(--bad);
+  }
+  60% {
+    transform: none;
+  }
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .cmd code {
+    font-size: 13px;
+  }
+  .copy {
+    min-width: 72px;
+    padding: 0 12px;
+  }
+}
+
+/* The diagram from top to bottom, with the class "tall". */
+.flow.tall {
+  grid-template-columns: 1fr;
+}
+.flow.tall .link {
+  --end-x: 0;
+  --end-y: 100%;
+  justify-self: center;
+  width: 1px;
+  height: 54px;
+}
+.flow.tall .link-label {
+  left: 14px;
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .flow * {
+    animation: none !important;
+  }
+}
+
+/* ---------- The page ---------- */
+
+:root {
+  color-scheme: dark;
+  --ground: #080917;
+  --tile: #12142a;
+  --panel: #1a1d38;
+  --line: #2a2e52;
+  --text: #eef0ff;
+  --soft: #a3a8cc;
+  --dot: #abb9fe;
+  --ink: #5a66c7;
+  --led: #5edb81;
+  --term: #0e1020;
+  --plan: #f2b45a;
+  --page: 1140px;
+  --gutter: clamp(16px, 4vw, 40px);
+}
+
+body {
+  background: var(--ground);
+  color: var(--text);
+}
+a {
+  color: var(--dot);
+}
+
+/* ---------- The light behind the page ---------- */
+
+.sky {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+}
+.sky i {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.5;
+  animation: drift 26s ease-in-out infinite alternate;
+}
+.sky i:nth-child(1) {
+  left: -20vmax;
+  top: -30vmax;
+  background: #4a3fd0;
+}
+.sky i:nth-child(2) {
+  right: -25vmax;
+  top: -20vmax;
+  background: #7a3fd0;
+  animation-duration: 32s;
+  animation-direction: alternate-reverse;
+}
+.sky i:nth-child(3) {
+  left: 25vw;
+  top: 40vh;
+  width: 40vmax;
+  height: 40vmax;
+  background: #1f8f66;
+  opacity: 0.22;
+  animation-duration: 38s;
+}
+@keyframes drift {
+  to {
+    transform: translate(8vmax, 6vmax) scale(1.15);
+  }
+}
+
+/* ---------- Top bar ---------- */
+
+.top {
+  position: sticky;
+  top: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(calc(100% - var(--gutter) * 2), var(--page));
+  margin: 12px auto 0;
+  padding: 10px 12px 10px 18px;
+  background: color-mix(in srgb, var(--tile) 70%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--dot) 18%, transparent);
+  border-radius: 999px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+.top nav {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2.6vw, 28px);
+  font-size: 15px;
+}
+.top nav a {
+  color: var(--soft);
+  text-decoration: none;
+}
+.top nav a:hover {
+  color: var(--text);
+}
+.top nav .nav-repo {
+  padding: 7px 16px;
+  font-weight: 550;
+  color: var(--ground);
+  background: var(--text);
+  border-radius: 999px;
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  overflow-x: clip;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(32px, 5vw, 56px) var(--gutter) 0;
+  text-align: center;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  font-size: 14.5px;
+  color: var(--soft);
+  background: color-mix(in srgb, var(--tile) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dot) 22%, transparent);
+  border-radius: 999px;
+}
+.pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--led);
+  box-shadow: 0 0 10px 2px color-mix(in srgb, var(--led) 60%, transparent);
+}
+h1 {
+  max-width: 16ch;
+  margin-top: 22px;
+  font-size: clamp(2.6rem, 7vw, 4.8rem);
+  font-weight: 640;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  color: transparent;
+  background: linear-gradient(180deg, #fff 20%, var(--dot) 75%, #8f7bff);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+.lead {
+  max-width: 74ch;
+  margin-top: 18px;
+  text-wrap: balance;
+  font-size: clamp(1.05rem, 1.7vw, 1.28rem);
+  color: var(--soft);
+}
+.hero .cmd {
+  width: 100%;
+  margin-top: 26px;
+  text-align: left;
+  border-color: color-mix(in srgb, var(--dot) 30%, transparent);
+  box-shadow: 0 0 60px -12px color-mix(in srgb, var(--ink) 80%, transparent);
+}
+
+/* The stage: a floor of lines that runs into the distance, and the desktop
+   picture on it. The picture lies back at the top of the page. The script
+   stands it up as the visitor scrolls. */
+.stage {
+  position: relative;
+  width: 100%;
+  max-width: var(--page);
+  margin-top: clamp(40px, 4vw, 52px);
+  text-align: left;
+  perspective: 1800px;
+}
+.floor {
+  position: absolute;
+  left: 50%;
+  bottom: -12%;
+  z-index: -1;
+  width: 180%;
+  height: 80%;
+  background:
+    linear-gradient(to right, color-mix(in srgb, var(--dot) 26%, transparent) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(to bottom, color-mix(in srgb, var(--dot) 26%, transparent) 1px, transparent 1px) 0 0 / 56px 56px;
+  transform: translateX(-50%) rotateX(72deg);
+  transform-origin: bottom;
+  mask-image: radial-gradient(ellipse at 50% 100%, #000 10%, transparent 68%);
+  animation: floor 3s linear infinite;
+}
+@keyframes floor {
+  to {
+    background-position:
+      0 56px,
+      0 56px;
+  }
+}
+/* 2 windows in the same place: the terminal behind, the browser in front. */
+.layers {
+  display: grid;
+  transform: rotateX(calc(var(--tilt, 1) * 10deg));
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+.shell,
+.view {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--term);
+  border: 1px solid color-mix(in srgb, var(--dot) 25%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  transition:
+    opacity 450ms ease-out,
+    transform 650ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 450ms ease-out,
+    border-color 200ms ease-out;
+}
+.view {
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    0 -30px 120px -20px color-mix(in srgb, #7a5cff 70%, transparent),
+    0 60px 140px -40px color-mix(in srgb, var(--ink) 80%, transparent);
+}
+/* The finished picture: the terminal stands back and shows above the browser. */
+.shell {
+  transform: translateY(-3.4%) scale(0.93);
+  transform-origin: 50% 0;
+  filter: brightness(0.55);
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--soft);
+  background: var(--tile);
+  border-bottom: 1px solid var(--line);
+}
+.dots {
+  display: flex;
+  gap: 6px;
+}
+.dots i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.bar-url {
+  flex: 1;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 3px 14px;
+  text-align: center;
+  color: var(--text);
+  background: var(--ground);
+  border-radius: 999px;
+}
+.shell-body {
+  flex: 1;
+  padding: clamp(14px, 2.2vw, 28px);
+  font-family: var(--font-mono);
+  font-size: clamp(11.5px, 1.2vw, 14px);
+  line-height: 1.6;
+  color: var(--soft);
+}
+.shell-body p {
+  overflow-wrap: anywhere;
+}
+.shell-body .in {
+  color: var(--text);
+}
+.shell-body .ps {
+  color: var(--dot);
+}
+.shell-body b {
+  font-weight: 500;
+  color: var(--led);
+}
+.shell-body u {
+  padding: 1px 4px;
+  margin: 0 -4px;
+  color: var(--text);
+  text-underline-offset: 0.25em;
+  border-radius: 4px;
+  transition: background 150ms ease-out;
+}
+.shell-body .gap {
+  margin-top: 1em;
+}
+.shell-body .ind {
+  padding-left: 2ch;
+}
+.caret {
+  display: none;
+  width: 0.6em;
+  height: 1.15em;
+  margin-left: 0.15em;
+  vertical-align: text-bottom;
+  background: var(--text);
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.view-body {
+  position: relative;
+  container-type: inline-size;
+}
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* The script lays the other screenshots over the last one and shows them
+   one after the other. */
+.shot.frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+.shot.frame.on {
+  opacity: 1;
+}
+/* The command that is typed in the Terminal window of the screenshot. Its
+   place and size match the prompt line of that screenshot. */
+.typed {
+  position: absolute;
+  left: 55.67%;
+  top: 54.69%;
+  display: none;
+  padding-right: 1.4em;
+  font-family: var(--font-mono);
+  font-size: 0.903cqw;
+  line-height: 1.435cqw;
+  white-space: pre;
+  color: #e6e7ee;
+  background: rgb(22, 24, 31);
+}
+.typed.on {
+  display: block;
+}
+.typed::after {
+  content: '';
+  position: absolute;
+  width: 0.6em;
+  height: 100%;
+  background: #e6e7ee;
+}
+
+/* ---------- The sequence ----------
+   The script sets "seq" on the stage and then adds 1 class per step. */
+.seq .shell {
+  transform: none;
+  filter: none;
+}
+.seq .shell.focus {
+  border-color: var(--dot);
+}
+.seq .caret {
+  display: inline-block;
+}
+.seq .pasted,
+.seq .o {
+  display: none;
+}
+.seq .pasted.show {
+  display: inline;
+}
+.seq .o.show {
+  display: block;
+}
+.seq .shell-body u.hit {
+  background: color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.seq .view {
+  opacity: 0;
+  transform: translateY(9%) scale(0.96);
+}
+.seq.s-view .shell {
+  transform: translateY(-3.4%) scale(0.93);
+  filter: brightness(0.55);
+}
+.seq.s-view .caret {
+  display: none;
+}
+.seq.s-view .view {
+  opacity: 1;
+  transform: none;
+}
+/* The picture stands upright while the pointer works in it. */
+.seq.s-view .layers {
+  transform: none;
+  transition: transform 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The drawn pointer. The script moves it over the page. */
+.hero {
+  position: relative;
+}
+.pointer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 750ms cubic-bezier(0.5, 0, 0.2, 1),
+    opacity 300ms ease-out;
+}
+.pointer svg {
+  display: block;
+  width: 100%;
+  fill: #fff;
+  stroke: var(--ground);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+  transition: transform 120ms ease-out;
+}
+.pointer.on {
+  opacity: 1;
+}
+.pointer.press svg {
+  transform: scale(0.82);
+}
+.pointer::after {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: -12px;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--dot);
+  border-radius: 50%;
+  opacity: 0;
+}
+.pointer.press::after {
+  animation: ring 450ms ease-out;
+}
+@keyframes ring {
+  from {
+    opacity: 0.9;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+
+.again {
+  display: block;
+  margin: 18px 0 0 auto;
+  padding: 6px 16px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--soft);
+  background: color-mix(in srgb, var(--tile) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dot) 22%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.again:hover {
+  color: var(--text);
+}
+.again[hidden] {
+  display: none;
+}
+
+/* ---------- The 4 numbers ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  width: min(calc(100% - var(--gutter) * 2), var(--page));
+  margin: clamp(48px, 7vw, 90px) auto 0;
+}
+.stats li,
+.card,
+.soon li {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--panel) 70%, transparent), color-mix(in srgb, var(--tile) 55%, transparent));
+  border: 1px solid color-mix(in srgb, var(--dot) 16%, transparent);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+}
+.stats li {
+  padding: clamp(18px, 2.4vw, 28px);
+}
+.stats b {
+  display: block;
+  font-size: clamp(1.9rem, 4.2vw, 3.2rem);
+  font-weight: 640;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  color: transparent;
+  background: linear-gradient(120deg, #fff, var(--dot) 60%, var(--led));
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+/* A small drawing above each number. */
+.shape {
+  position: relative;
+  display: block;
+  height: 46px;
+  margin-bottom: 20px;
+}
+.shape::before,
+.shape::after {
+  content: '';
+  position: absolute;
+}
+/* 1 binary: 1 block that holds the 9 dots of the logo. */
+.s-one::before {
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  background:
+    radial-gradient(circle, #fff 2.6px, transparent 3.2px) 5px 5px / 12px 12px,
+    linear-gradient(140deg, var(--dot), var(--ink));
+  background-clip: content-box, border-box;
+  padding: 5px;
+  border-radius: 12px;
+  box-shadow: 0 0 28px -4px var(--ink);
+  animation: breathe 4s ease-in-out infinite;
+}
+/* The place of a second program, which does not exist. */
+.s-one::after {
+  left: 58px;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  border: 1.5px dashed color-mix(in srgb, var(--dot) 30%, transparent);
+  border-radius: 12px;
+}
+/* 10-30 MB: the memory of a 512 MB server as 24 parts. 1 or 2 are in use. */
+.s-ram::before,
+.s-ram::after {
+  inset: 14px 0;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--dot) 20%, transparent) 0 calc(100% / 24 - 2px), transparent 0 calc(100% / 24));
+  border-radius: 3px;
+}
+.s-ram::after {
+  background: repeating-linear-gradient(90deg, var(--led) 0 calc(100% / 24 - 2px), transparent 0 calc(100% / 24));
+  filter: drop-shadow(0 0 6px var(--led));
+  animation: ram 5s steps(1) infinite;
+}
+@keyframes ram {
+  0%,
+  100% {
+    clip-path: inset(-10px calc(100% - 100% / 24) -10px -10px);
+  }
+  50% {
+    clip-path: inset(-10px calc(100% - 100% / 12) -10px -10px);
+  }
+}
+/* 512 MB VPS: a small server of 3 units. The light of 1 unit blinks. */
+.s-vps::before {
+  left: 0;
+  top: 0;
+  width: 84px;
+  height: 12px;
+  background: color-mix(in srgb, var(--panel) 70%, var(--dot));
+  border-radius: 4px;
+  box-shadow:
+    0 17px 0 color-mix(in srgb, var(--panel) 70%, var(--dot)),
+    0 34px 0 color-mix(in srgb, var(--panel) 70%, var(--dot));
+}
+.s-vps::after {
+  left: 7px;
+  top: 3.5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--led);
+  box-shadow:
+    0 17px 0 var(--led),
+    0 34px 0 var(--led);
+  animation: blink 2.4s steps(2) infinite;
+}
+/* 0 work: an activity chart with every bar at 0. It does not move. */
+.s-zero::before {
+  inset: 0;
+  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--dot) 16%, transparent) 0 1px, transparent 0 15px);
+}
+.s-zero::after {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--dot) 0 calc(100% / 24 - 2px), transparent 0 calc(100% / 24));
+  border-radius: 1px;
+}
+@keyframes breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.stats span {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.96rem;
+  line-height: 1.4;
+  color: var(--soft);
+}
+
+/* ---------- Sections ---------- */
+
+.band {
+  width: min(calc(100% - var(--gutter) * 2), var(--page));
+  margin: 0 auto;
+  padding-top: clamp(80px, 12vw, 150px);
+}
+h2 {
+  max-width: 20ch;
+  font-size: clamp(2rem, 4.6vw, 3.4rem);
+  font-weight: 620;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.sub {
+  max-width: 60ch;
+  margin-top: 16px;
+  color: var(--soft);
+}
+h3 {
+  font-size: 1.12rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+/* Apps: cards of different sizes. A soft light follows the pointer. */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-top: clamp(32px, 5vw, 56px);
+}
+.card {
+  position: relative;
+  grid-column: span 2;
+  padding: 22px;
+  overflow: hidden;
+}
+.card.wide {
+  grid-column: span 4;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, -40%), color-mix(in srgb, var(--dot) 22%, transparent), transparent 60%);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  pointer-events: none;
+}
+.card:hover::before {
+  opacity: 1;
+}
+.card p {
+  margin-top: 6px;
+  font-size: 0.96rem;
+  color: var(--soft);
+}
+.art {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  height: 150px;
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--term);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.art span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.art em {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--soft);
+}
+.art i {
+  flex: none;
+  width: 9px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--soft);
+}
+.art i.dir {
+  height: 9px;
+  background: var(--dot);
+}
+.a-files .up {
+  position: relative;
+  padding-bottom: 7px;
+  color: var(--dot);
+}
+.a-files .up b {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--ink), var(--led));
+  transform-origin: left;
+  animation: upload 5s ease-in-out infinite;
+}
+@keyframes upload {
+  0% {
+    transform: scaleX(0.05);
+  }
+  80%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+.a-term {
+  justify-content: flex-start;
+}
+.a-term .ps {
+  color: var(--dot);
+}
+.a-term .type {
+  display: block;
+  width: 24ch;
+  max-width: 100%;
+  overflow: hidden;
+  border-right: 0.6em solid var(--text);
+  animation: typing 6s steps(24) infinite;
+}
+@keyframes typing {
+  0% {
+    width: 0;
+  }
+  45%,
+  100% {
+    width: 24ch;
+  }
+}
+.a-code {
+  gap: 2px;
+}
+.a-code u {
+  text-decoration: none;
+  color: var(--dot);
+}
+.a-code b {
+  font-weight: 400;
+  color: var(--led);
+}
+.a-search .keys {
+  gap: 6px;
+  margin-bottom: 6px;
+}
+kbd {
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-bottom-width: 3px;
+  border-radius: 7px;
+}
+.a-search .hit {
+  margin: 0 -8px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--ink) 50%, transparent);
+  border-radius: 6px;
+}
+.a-search span:last-child {
+  color: var(--soft);
+}
+.a-log i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--led);
+}
+.a-log .bad i {
+  background: #ff7a85;
+}
+.a-log .bad em {
+  color: #ff7a85;
+}
+
+/* Security: the diagram on the left, the list of controls on the right. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: start;
+  margin-top: clamp(32px, 5vw, 56px);
+}
+.split .flow {
+  margin-top: 0;
+  padding: 24px;
+  background: color-mix(in srgb, var(--tile) 70%, transparent);
+  border-color: color-mix(in srgb, var(--dot) 16%, transparent);
+  border-radius: 20px;
+}
+.split .flow-log {
+  min-height: 4.6em;
+}
+.checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+}
+.checks li {
+  position: relative;
+  padding: 16px 0 16px 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--dot) 14%, transparent);
+}
+.checks li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 24px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--led);
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--led) 55%, transparent);
+}
+.checks h3 {
+  font-size: 1rem;
+}
+.checks p {
+  margin-top: 3px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--soft);
+}
+
+/* Planned apps. */
+.soon {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 14px;
+  margin-top: clamp(32px, 5vw, 56px);
+}
+.soon li {
+  padding: 18px 20px;
+  border-style: dashed;
+}
+.soon h3::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 10px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: var(--plan);
+}
+.soon p {
+  margin-top: 4px;
+  font-size: 0.93rem;
+  color: var(--soft);
+}
+
+/* Install: a panel with a light that runs round its border. */
+@property --turn {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.glow {
+  position: relative;
+  padding: clamp(24px, 5vw, 56px);
+  background: color-mix(in srgb, var(--tile) 80%, transparent);
+  border-radius: 28px;
+}
+.glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--turn), color-mix(in srgb, var(--dot) 18%, transparent) 0 62%, var(--dot), var(--led), color-mix(in srgb, var(--dot) 18%, transparent));
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  animation: turn 7s linear infinite;
+  pointer-events: none;
+}
+@keyframes turn {
+  to {
+    --turn: 360deg;
+  }
+}
+.steps {
+  margin-top: 32px;
+  counter-reset: step;
+}
+.steps li {
+  position: relative;
+  padding: 0 0 26px 54px;
+  counter-increment: step;
+}
+.steps li:last-child {
+  padding-bottom: 0;
+}
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: -4px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--ground);
+  background: var(--dot);
+  border-radius: 50%;
+}
+.steps p {
+  max-width: 62ch;
+  margin-top: 6px;
+  color: var(--soft);
+}
+.steps .cmd {
+  margin-top: 14px;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 28px;
+  width: min(calc(100% - var(--gutter) * 2), var(--page));
+  margin: clamp(80px, 12vw, 140px) auto 0;
+  padding: 28px 0 44px;
+  font-size: 15px;
+  color: var(--soft);
+  border-top: 1px solid color-mix(in srgb, var(--dot) 16%, transparent);
+}
+.foot .wordmark {
+  margin-right: auto;
+  color: var(--text);
+}
+.foot a {
+  color: var(--soft);
+}
+
+/* A low window: a smaller headline, so the terminal is in view. */
+@media (max-height: 840px) and (min-width: 701px) {
+  h1 {
+    max-width: none;
+    font-size: clamp(2.4rem, 5vw, 3.6rem);
+  }
+}
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .card,
+  .card.wide {
+    grid-column: span 6;
+  }
+}
+@media (max-width: 700px) {
+  .top nav a:not(.nav-repo) {
+    display: none;
+  }
+  .stats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .checks {
+    grid-template-columns: 1fr;
+  }
+  .layers {
+    gap: 14px;
+    transform: none;
+  }
+  /* The terminal first, the browser under it. */
+  .shell,
+  .view {
+    grid-area: auto;
+    transform: none;
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky i,
+  .floor,
+  .glow::before,
+  .a-files .up b,
+  .a-term .type,
+  .caret,
+  .shape::before,
+  .shape::after {
+    animation: none;
+  }
+  .layers {
+    transform: none;
+  }
+}

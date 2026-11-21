@@ -1,0 +1,14 @@
+{
+  "name": "rackdesk-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev --host 127.0.0.1 --port 8100",
+    "build": "ASTRO_TELEMETRY_DISABLED=1 astro build && node check-output.mjs",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview --host 127.0.0.1 --port 8100"
+  },
+  "devDependencies": {
+    "astro": "^7.4.13",
+    "sharp": "^0.35.5"
+  }
+}
