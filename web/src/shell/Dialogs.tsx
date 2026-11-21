@@ -16,7 +16,9 @@ export const Dialogs = memo(function Dialogs() {
         <Dialog.Overlay className="dialog-scrim" />
         <Dialog.Content className="panel dialog" role={question.type === 'choose' ? 'alertdialog' : 'dialog'} aria-describedby={question.type === 'choose' ? 'rd-dialog-body' : undefined}>
           <Dialog.Title className="dialog-title">{question.title}</Dialog.Title>
-          {question.type === 'choose' ? (
+          {question.type === 'panel' ? (
+            question.render(dismissQuestion)
+          ) : question.type === 'choose' ? (
             <>
               <p id="rd-dialog-body" className="muted">
                 {question.body}

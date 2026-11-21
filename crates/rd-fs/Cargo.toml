@@ -11,6 +11,7 @@ publish.workspace = true
 rd-api.workspace = true
 cap-std.workspace = true
 rustix.workspace = true
+zip.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

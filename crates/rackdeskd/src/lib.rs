@@ -4,16 +4,21 @@
 //! here, so the integration tests in `tests/` can call the router without a
 //! network socket.
 
+pub mod audit;
 pub mod auth;
 pub mod csrf;
 pub mod error;
 pub mod files;
 pub mod files_write;
+pub mod helper;
+pub mod ids;
+pub mod perms;
 pub mod state;
+pub mod term;
 pub mod tls;
 mod ui;
 
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{header, HeaderValue};
 use axum::routing::{get, patch, post, put};
 use axum::{middleware, Json, Router};
@@ -40,11 +45,19 @@ pub fn router(state: AppState) -> Router {
     // Every other API route needs a session whose password has been changed.
     let protected = Router::new()
         .route("/server", get(server_info))
+        .route("/audit", get(audit::recent))
+        .route("/term", get(term::connect))
         .route("/fs/list", get(files::list))
         .route("/fs/entry", get(files::entry))
         .route("/fs/places", get(files::places))
         .route("/fs/search", get(files::search))
         .route("/fs/download", get(files::download))
+        .route("/fs/zip", get(files::download_zip))
+        .route("/fs/compress", post(files_write::compress))
+        .route("/fs/properties", get(perms::properties))
+        .route("/fs/chmod", post(perms::chmod))
+        .route("/fs/chown", post(perms::chown))
+        .route("/fs/extract", post(files_write::extract))
         .route("/fs/mkdir", post(files_write::mkdir))
         .route("/fs/rename", post(files_write::rename))
         .route("/fs/copy", post(files_write::copy))
@@ -115,10 +128,11 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn server_info() -> Json<ServerInfo> {
+async fn server_info(State(state): State<AppState>) -> Json<ServerInfo> {
     Json(ServerInfo {
         hostname: hostname(),
         version: env!("CARGO_PKG_VERSION").into(),
+        terminal: state.config().terminal != term::TermMode::Off,
     })
 }
 

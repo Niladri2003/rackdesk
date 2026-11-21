@@ -108,6 +108,14 @@ impl SessionStore {
         Some(session.username.clone())
     }
 
+    /// True if the session exists and has not timed out. Unlike `touch`, it
+    /// does not count as use of the session.
+    pub fn is_live(&self, id: &str, now: Instant) -> bool {
+        self.lock()
+            .get(id)
+            .is_some_and(|s| !s.expired(&self.timeouts, now))
+    }
+
     /// Ends one session. Unknown ids are ignored.
     pub fn revoke(&self, id: &str) {
         self.lock().remove(id);

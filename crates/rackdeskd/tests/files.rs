@@ -35,7 +35,9 @@ fn names(listing: &DirListing) -> Vec<&str> {
     listing.entries.iter().map(|e| e.name.as_str()).collect()
 }
 
-const ROUTES: [&str; 5] = [
+const ROUTES: [&str; 7] = [
+    "/api/v1/fs/properties?path=/notes.txt",
+    "/api/v1/fs/zip?path=/docs",
     "/api/v1/fs/list?path=/",
     "/api/v1/fs/entry?path=/notes.txt",
     "/api/v1/fs/places",
@@ -81,6 +83,9 @@ async fn paths_with_dot_dot_are_refused_on_every_route() {
         "/api/v1/fs/download?path=/../outside.txt",
         "/api/v1/fs/download?path=/docs/../../outside.txt",
         "/api/v1/fs/download?path=..%2Foutside.txt",
+        "/api/v1/fs/zip?path=/..",
+        "/api/v1/fs/properties?path=/../outside.txt",
+        "/api/v1/fs/zip?path=/docs/../..",
     ] {
         let res = get(&server, &cookie, route).await;
         assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{route}");
@@ -445,4 +450,30 @@ async fn the_file_name_in_the_header_is_encoded() {
         res.headers()[header::CONTENT_DISPOSITION],
         "attachment; filename=\"caf_ _menu_.txt\"; filename*=UTF-8''caf%C3%A9%20%22menu%22.txt"
     );
+}
+
+#[tokio::test]
+async fn a_folder_downloads_as_a_zip_made_on_the_fly() {
+    use std::io::Read;
+    let (server, cookie) = setup().await;
+    let res = get(&server, &cookie, "/api/v1/fs/zip?path=/docs").await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CONTENT_TYPE], "application/zip");
+    assert!(res.headers()[header::CONTENT_DISPOSITION]
+        .to_str()
+        .unwrap()
+        .starts_with("attachment; filename=\"docs.zip\""));
+
+    let bytes = bytes_body(res).await;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut text = String::new();
+    zip.by_name("docs/deep/compose.yml")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    assert_eq!(text, "services: {}\n");
+
+    let missing = get(&server, &cookie, "/api/v1/fs/zip?path=/nope").await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    assert_eq!(error_code(missing).await, "not_found");
 }
