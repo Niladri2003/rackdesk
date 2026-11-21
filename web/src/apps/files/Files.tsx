@@ -1,6 +1,6 @@
 // The file browser. It reads folders through /api/v1/fs and never changes
 // anything on the server.
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, CircleAlert, ClipboardPaste, FileArchive, Info, PackageOpen, Copy, CopyPlus, Download, Eye, EyeOff, FilePlus, FolderOpen, FolderPlus, LayoutGrid, List, Pencil, Scissors, Search, Star, TextCursorInput, Trash2, Upload } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, CircleAlert, ClipboardPaste, FileArchive, Info, PackageOpen, Copy, CopyPlus, Download, Eye, EyeOff, FilePlus, FolderOpen, FolderPlus, LayoutGrid, List, Pencil, Scissors, Search, SquareTerminal, Star, TextCursorInput, Trash2, Upload } from 'lucide-react'
 import { ContextMenu } from 'radix-ui'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { DragEvent, KeyboardEvent } from 'react'
@@ -591,6 +591,13 @@ export function Files({ params, setParams }: AppProps) {
               <ContextMenu.Item className="menu-item" onSelect={() => void newFolder(path)}>
                 <FolderPlus size={15} aria-hidden="true" />
                 {f.newFolder}
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className="menu-item"
+                onSelect={() => shell.openApp('terminal', { cwd: selectedEntry && selectedKind?.open === 'folder' ? selectedPath : path })}
+              >
+                <SquareTerminal size={15} aria-hidden="true" />
+                {t.terminal.openHere}
               </ContextMenu.Item>
               <ContextMenu.Item className="menu-item" onSelect={() => void newFile(path, openInEditor)}>
                 <FilePlus size={15} aria-hidden="true" />

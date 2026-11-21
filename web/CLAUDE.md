@@ -2,7 +2,7 @@
 
 Read the root `CLAUDE.md` first. This file covers the React app in `web/`.
 
-**Status:** the desktop shell, Settings, the file browser (read and write), the file preview and the text editor are built. Terminal is a placeholder window. The look follows the accepted design ("Shelf" direction: a rail on the left edge).
+**Status:** the desktop shell, Settings, the file browser (read and write), the file preview, the text editor and the terminal are built. The look follows the accepted design ("Shelf" direction: a rail on the left edge).
 
 ## Commands
 ```sh
@@ -14,9 +14,9 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 `make e2e` from the repo root builds both and runs the tests. Run it after any UI change.
 
 ## Stack
-- **Installed:** React 19, TypeScript, Vite, oxlint, Radix UI (`radix-ui`), Lucide icons (`lucide-react`), TanStack Virtual (`@tanstack/react-virtual`), CodeMirror 6 (loaded on demand, in `apps/editor/codemirror.ts`). Tests: Playwright, `@axe-core/playwright`.
+- **Installed:** React 19, TypeScript, Vite, oxlint, Radix UI (`radix-ui`), Lucide icons (`lucide-react`), TanStack Virtual (`@tanstack/react-virtual`), CodeMirror 6 (loaded on demand, in `apps/editor/codemirror.ts`), xterm.js (loaded on demand, in `apps/terminal/Terminal.tsx`). Tests: Playwright, `@axe-core/playwright`.
 - **Not used, on purpose:** Tailwind CSS and Motion. Styles are plain CSS with tokens, and animations are CSS transitions (ADR 0005).
-- **Planned for later apps:** xterm.js (terminal), dnd-kit (drag and drop).
+- **Planned for later apps:** dnd-kit (drag and drop).
 - Check with the user before adding anything outside this list.
 
 ## Where things are
@@ -69,6 +69,7 @@ npm run e2e      # Playwright and axe. Needs a built UI and `cargo build -p rack
 - **Uploads go through `shell/transfers.ts`** (`startUploads`). It sends chunks, resumes, and shows the panel.
 - **A window with unsaved work sets a close check** with `setCloseGuard` from `AppProps`, as the editor does.
 - **Two files must not differ only in letter case** (`transfers.ts` and `Transfers.tsx`). macOS treats them as 1 file.
+- **An app must not take the focus late.** If it sets the focus after loading something, it first checks that its window is still the focused one (`data-focused` on `.win`), as the terminal does.
 - **Nothing polls in the background.** Live data is requested only while the window showing it is open, and stops when it closes.
 - **A file that exports a component exports nothing else.** Constants and helpers go in a `.ts` file next to it. The linter checks this.
 

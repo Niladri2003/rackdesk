@@ -14,6 +14,7 @@ import { ACCENTS, WALLPAPERS, accentSwatch, wallpaperColor } from '../../theme/t
 import type { Accent } from '../../theme/tokens'
 import { Lockup } from '../../ui/Logo'
 import type { AppProps } from '../registry'
+import { Activity } from './Activity'
 import { SECTIONS, sectionOf } from './sections'
 
 const s = t.settings
@@ -44,6 +45,7 @@ export function Settings({ params, setParams }: AppProps) {
         <div className="settings-content">
           {current.id === 'account' && <Account />}
           {current.id === 'appearance' && <Appearance />}
+          {current.id === 'activity' && <Activity />}
           {current.id === 'about' && <About />}
         </div>
       </div>

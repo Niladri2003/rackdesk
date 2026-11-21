@@ -106,7 +106,7 @@ test('search finds apps, settings and actions, and works from the keyboard', asy
   const input = page.getByRole('combobox', { name: 'Search everything' })
   await expect(input).toBeFocused()
   // With no query it suggests apps and actions.
-  await expect(page.getByRole('option', { name: /Terminal/ })).toContainText('Later')
+  await expect(page.getByRole('option', { name: /Terminal/ })).toBeVisible()
   await expect(page.getByRole('option', { name: /Sign out/ })).toBeVisible()
 
   await input.fill('wallpaper')
@@ -126,6 +126,33 @@ test('search finds apps, settings and actions, and works from the keyboard', asy
   await expect(page.getByText('No results')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(input).toHaveCount(0)
+})
+
+test('the terminal runs a command on the server, and Activity lists it', async ({ page }) => {
+  await railButton(page, 'Terminal').click()
+  const win = windowOf(page, 'Terminal')
+  // The text copy of the screen that the terminal keeps for screen readers.
+  const screen = win.locator('.xterm-accessibility-tree')
+  await expect(screen).toBeAttached()
+  await win.getByRole('textbox', { name: 'Terminal input' }).focus()
+  // The sum shows that a shell ran the line, not only that it was typed.
+  await page.keyboard.type('echo web-$((6*7))')
+  await page.keyboard.press('Enter')
+  await expect(screen).toContainText('web-42')
+
+  // Ctrl+K belongs to the shell here. It must not open the search.
+  await page.keyboard.press('Control+k')
+  await expect(page.getByRole('combobox')).toHaveCount(0)
+
+  await win.getByRole('button', { name: 'Close' }).click()
+  await railButton(page, 'Settings').click()
+  const settings = windowOf(page, 'Settings')
+  await settings.getByRole('button', { name: 'Activity' }).click()
+  const table = settings.getByRole('table')
+  await expect(table.getByRole('row').filter({ hasText: 'terminal.open' }).first()).toBeVisible()
+  await expect(table.getByRole('row').filter({ hasText: 'terminal.close' }).first()).toBeVisible()
+  // What was typed is not in the log.
+  await expect(table).not.toContainText('web-')
 })
 
 test('Alt+` switches to the window that was used before', async ({ page }) => {
@@ -200,7 +227,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await railButton(page, 'Terminal').click()
     await railButton(page, 'Settings').click()
     const settings = windowOf(page, 'Settings')
-    for (const section of ['Account', 'Appearance', 'About']) {
+    for (const section of ['Account', 'Appearance', 'Activity', 'About']) {
       await settings.getByRole('button', { name: section, exact: true }).click()
       await expect(settings.getByRole('heading', { name: section })).toBeVisible()
       await expectAccessible(page)

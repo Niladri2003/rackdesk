@@ -13,7 +13,7 @@ A desktop for your Linux server, in the browser. Install one small program, open
 - Secure by default: random first password, localhost unless you choose otherwise, all file access confined (see `docs/security/SECURITY.md`).
 - Access it however you like: LAN, reverse proxy, SSH forward, VPN or a tunnel.
 
-**Status:** M5 is done: sign-in, sessions, HTTPS, the desktop, a full file browser with a text editor, zip archives, a permissions editor, an audit log, and a small root helper for actions that need root. The terminal (M6) is next. See `docs/ROADMAP.md`.
+**Status:** M6 is done: sign-in, sessions, HTTPS, the desktop, a full file browser with a text editor, zip archives, a permissions editor, an audit log with a view in Settings, a small root helper, and a terminal. The release work (M7) is next. See `docs/ROADMAP.md`.
 
 | Read | For |
 |---|---|
@@ -33,6 +33,7 @@ Each setting is a command flag or an environment variable. All have defaults.
 | `--tls` | `RACKDESK_TLS` | `auto` | `auto`: HTTPS unless the listen address is loopback. `on`: HTTPS always. `off`: plain HTTP always |
 | `--tls-cert`, `--tls-key` | `RACKDESK_TLS_CERT`, `RACKDESK_TLS_KEY` | not set | Your own certificate and key (PEM). Without them the server makes a self-signed certificate |
 | `--max-upload-bytes` | `RACKDESK_MAX_UPLOAD_BYTES` | 20 GiB | Largest file that can be uploaded |
+| `--terminal` | `RACKDESK_TERMINAL` | `off` | Who starts the shell of the terminal. `off`: no terminal. `helper`: `rackdesk-helper`, as the user it was started with. `direct`: the server, as its own user |
 | `--helper-socket` | `RACKDESK_HELPER_SOCKET` | not set | The socket of `rackdesk-helper`. Without it, nothing is done as root |
 | `--behind-proxy` | `RACKDESK_BEHIND_PROXY` | off | Set it when a reverse proxy with HTTPS forwards requests to RackDesk |
 | `--files-root` | `RACKDESK_FILES_ROOT` | `/` | The folder the file browser shows as `/`. Nothing above it can be read |
