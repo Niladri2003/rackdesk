@@ -179,7 +179,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 5px 0 14px;
-  background: var(--side);
+  background: var(--title);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   touch-action: none;
