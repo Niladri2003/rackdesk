@@ -267,10 +267,42 @@ async fn stop_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
-/// True when systemd started this process with its output connected to the
-/// journal. systemd sets `JOURNAL_STREAM` in that case.
+/// True when the standard output of this process is the stream that systemd
+/// connected to the journal.
+///
+/// systemd sets `JOURNAL_STREAM` to the device and inode number of that
+/// stream, as "device:inode". Every child process inherits the variable, also
+/// one whose output goes to a pipe or a file. So the variable alone proves
+/// nothing: the numbers are compared with those of the real standard output.
 fn output_goes_to_the_journal() -> bool {
-    std::env::var_os("JOURNAL_STREAM").is_some()
+    let Some(value) = std::env::var_os("JOURNAL_STREAM") else {
+        return false;
+    };
+    let numbers = value.to_str().and_then(|v| v.split_once(':'));
+    let parsed = numbers.and_then(|(device, inode)| {
+        Some((device.parse::<u64>().ok()?, inode.parse::<u64>().ok()?))
+    });
+    // A value that can't be read, or an output that can't be examined, is
+    // treated as the journal: not printing the password is the safe side.
+    let Some((device, inode)) = parsed else {
+        return true;
+    };
+    stdout_is(device, inode).unwrap_or(true)
+}
+
+/// Compares the device and inode number of the standard output with the
+/// given ones. `None` if they can't be read.
+#[cfg(unix)]
+fn stdout_is(device: u64, inode: u64) -> Option<bool> {
+    let stat = rustix::fs::fstat(std::io::stdout()).ok()?;
+    // The types of these fields differ between systems.
+    #[allow(clippy::unnecessary_cast)]
+    Some(stat.st_dev as u64 == device && stat.st_ino as u64 == inode)
+}
+
+#[cfg(not(unix))]
+fn stdout_is(_: u64, _: u64) -> Option<bool> {
+    None
 }
 
 /// Printed once, to the terminal only. Never logged through tracing, and not

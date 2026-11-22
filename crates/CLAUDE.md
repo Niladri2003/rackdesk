@@ -68,7 +68,7 @@ A new area of work (terminal, services, protocol of the root program) gets its o
 - A change to the layout of the data folder (a new file format, a renamed file) is a new step in `MIGRATIONS` in `crates/rackdeskd/src/datadir.rs`, with a test. A step must be safe to run again after it failed half way.
 - A file in the data folder is written under a temporary name made with `create_new`, then renamed. The service user can place a link in that folder, and `create_new` never follows one.
 - `rackdeskd` refuses to run as root on a data folder that another user owns. Don't add code that changes the owner of a file there.
-- The first password is never printed when the output goes to the journal (`JOURNAL_STREAM` is set). `rackdeskd init` and `reset-password` print it, because a person runs them.
+- The first password is never printed when the output goes to the journal. `JOURNAL_STREAM` names that stream by device and inode number, and the server compares them with its real standard output: a child of a service inherits the variable without writing to the journal. `rackdeskd init` and `reset-password` print it, because a person runs them.
 - Demo mode (`demo.rs`) must not reach real files. A new setting that widens what the server can reach gets a line in `demo::check`.
 
 ## The audit log
