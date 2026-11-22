@@ -22,7 +22,7 @@ export default async function globalSetup() {
   makeFiles(filesRoot)
   process.env.RD_E2E_FILES_ROOT = filesRoot
 
-  const server = spawn(BINARY, ['--data-dir', dataDir, '--files-root', filesRoot, '--listen', `127.0.0.1:${PORT}`], {
+  const server = spawn(BINARY, ['--data-dir', dataDir, '--files-root', filesRoot, '--listen', `127.0.0.1:${PORT}`, '--terminal', 'direct'], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const stop = () => {

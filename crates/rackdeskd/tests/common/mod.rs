@@ -56,7 +56,7 @@ pub async fn server_from(edit: impl FnOnce(&mut Config)) -> Server {
         // Larger than any disk, so a test can ask for more than the free
         // space without reaching this limit first.
         max_upload_bytes: u64::MAX / 4,
-        helper_socket: None,
+        root_socket: None,
         terminal: rackdeskd::term::TermMode::Off,
         https: false,
         behind_proxy: false,

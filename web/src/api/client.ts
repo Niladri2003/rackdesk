@@ -4,6 +4,7 @@
 // The session is an HttpOnly cookie. The browser sends it by itself, and this
 // code never reads or stores it.
 import type { ApiError } from './generated/ApiError'
+import type { AuditEntry } from './generated/AuditEntry'
 import type { DirEntry } from './generated/DirEntry'
 import type { DirListing } from './generated/DirListing'
 import type { EntryDetails } from './generated/EntryDetails'
@@ -90,6 +91,7 @@ export const api = {
   changePassword: (body: ChangePasswordRequest) =>
     request<SessionInfo>('POST', '/api/v1/session/password', body),
   serverInfo: () => request<ServerInfo>('GET', '/api/v1/server'),
+  audit: () => request<AuditEntry[]>('GET', '/api/v1/audit'),
   fs: {
     list: (query: ListQuery, signal?: AbortSignal) => request<DirListing>('GET', `/api/v1/fs/list?${listParams(query)}`, undefined, signal),
     entry: (path: string) => request<DirEntry>('GET', `/api/v1/fs/entry?${new URLSearchParams({ path })}`),
@@ -154,7 +156,7 @@ export function fileUrl(path: string, inline = false): string {
   return `/api/v1/fs/download?${params}`
 }
 
-/** The address that downloads a file through the root helper. For a file
+/** The address that downloads a file through the root program. For a file
  * that the server itself may not read. */
 export const elevatedFileUrl = (path: string) => `/api/v1/fs/download?${new URLSearchParams({ path, elevate: 'true' })}`
 

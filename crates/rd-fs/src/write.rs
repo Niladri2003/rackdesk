@@ -143,6 +143,11 @@ impl Root {
             return Ok(source.path());
         }
         Self::check_not_inside(from, to)?;
+        // With `Conflict::Replace` the target is removed first. If the source
+        // were inside it, the source would be removed with it.
+        if clean_path(from)?.starts_with(clean_path(to)?) {
+            return Err(FsError::InvalidPath("the source is inside the target"));
+        }
         let target = self.settle(self.place(to)?, conflict)?;
         if let Ok(meta) = target.dir.symlink_metadata(&target.name) {
             if meta.is_dir() {
@@ -218,10 +223,12 @@ impl Root {
         options.write(true).create_new(true);
         #[cfg(unix)]
         {
-            // The new file gets the permissions of the one it replaces.
+            // The new file gets the permissions of the one it replaces. The
+            // set-user-id, set-group-id and sticky bits are not kept: the
+            // content is new, and those bits were given to the old content.
             use cap_std::fs::{OpenOptionsExt, PermissionsExt};
             let mode = existing.as_ref().map_or(0o644, |m| m.permissions().mode());
-            options.mode(mode & 0o7777);
+            options.mode(mode & 0o777);
         }
         let written = (|| -> io::Result<String> {
             let mut file = place.dir.open_with(&temp, &options)?;
@@ -395,6 +402,18 @@ mod tests {
             fs::read_to_string(base.path().join("outside.txt")).unwrap(),
             "outside"
         );
+    }
+
+    /// Replacing a folder removes it first. A source inside that folder
+    /// would be removed with it, and the rename would then have nothing to
+    /// move.
+    #[test]
+    fn a_rename_onto_a_folder_that_holds_the_source_is_refused() {
+        let (base, r) = fixture();
+        let result = r.rename("/docs/deep", "/docs", Conflict::Replace);
+        assert!(matches!(result, Err(FsError::InvalidPath(_))));
+        assert_eq!(read(&base, "docs/deep/a.txt"), "a");
+        assert_eq!(read(&base, "docs/guide.md"), "guide");
     }
 
     #[test]

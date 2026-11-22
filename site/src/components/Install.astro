@@ -1,0 +1,18 @@
+---
+// The 3 steps to a running RackDesk.
+import InstallCommand from './InstallCommand.astro'
+---
+
+<section class="band" id="install">
+  <div class="glow">
+    <h2>Running in 3 steps.</h2>
+    <ol class="steps">
+      <li>
+        <h3>Run the installer on the server</h3>
+        <InstallCommand id="install-cmd-2" />
+      </li>
+      <li><h3>Open it in a browser</h3><p>The installer prints the address and the admin password. Reach the port the way you already reach the server: local network, reverse proxy, SSH forward, VPN or tunnel.</p></li>
+      <li><h3>Set your own password</h3><p>RackDesk asks for it at the first sign-in. After that the desktop opens.</p></li>
+    </ol>
+  </div>
+</section>

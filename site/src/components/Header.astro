@@ -1,0 +1,15 @@
+---
+import Mark from './Mark.astro'
+import { REPO_URL } from '../site.ts'
+---
+
+<header class="top">
+  <a class="brand" href="#top" aria-label="RackDesk, top of the page"><Mark /><span class="wordmark"><b>Rack</b>Desk</span></a>
+  <nav aria-label="Page">
+    <a href="#apps">Apps</a>
+    <a href="#security">Security</a>
+    <a href="#planned">Planned</a>
+    <a href="#install">Install</a>
+    <a class="nav-repo" href={REPO_URL}>GitHub</a>
+  </nav>
+</header>

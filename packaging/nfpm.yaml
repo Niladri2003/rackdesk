@@ -1,0 +1,46 @@
+# The .deb and .rpm packages, made by nfpm (https://nfpm.goreleaser.com).
+# scripts/build-release.sh replaces ${VERSION}, ${DEB_ARCH} and ${PKG} and runs
+# nfpm on the result, from the top folder of the repository.
+name: rackdesk
+arch: ${DEB_ARCH}
+platform: linux
+version: ${VERSION}
+section: admin
+priority: optional
+maintainer: RackDesk project <https://github.com/Niladri2003/rackdesk>
+description: |
+  A desktop for a Linux server, in the browser.
+  One small program. Sign in from a browser and manage the server with
+  windows and apps: files, an editor and a terminal.
+homepage: https://github.com/Niladri2003/rackdesk
+license: Apache-2.0
+
+contents:
+  - src: ${PKG}/rackdeskd
+    dst: /usr/bin/rackdeskd
+    file_info: { mode: 0755 }
+  - src: ${PKG}/rackdesk-root
+    dst: /usr/bin/rackdesk-root
+    file_info: { mode: 0755 }
+  - src: ${PKG}/systemd/rackdeskd.service
+    dst: /usr/lib/systemd/system/rackdeskd.service
+    file_info: { mode: 0644 }
+  - src: ${PKG}/systemd/rackdesk-root.service
+    dst: /usr/lib/systemd/system/rackdesk-root.service
+    file_info: { mode: 0644 }
+  # Kept when the package is updated, if the admin changed it.
+  - src: packaging/rackdesk.env
+    dst: /etc/rackdesk/rackdesk.env
+    type: config|noreplace
+    file_info: { mode: 0644 }
+  - src: LICENSE
+    dst: /usr/share/doc/rackdesk/LICENSE
+    file_info: { mode: 0644 }
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+rpm:
+  group: Applications/System

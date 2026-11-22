@@ -4,8 +4,8 @@ members = [
     "crates/rd-api",
     "crates/rd-fs",
     "crates/rd-auth",
-    "crates/rd-helper-proto",
-    "crates/rackdesk-helper",
+    "crates/rd-root-proto",
+    "crates/rackdesk-root",
     "crates/rackdeskd",
 ]
 
@@ -21,13 +21,13 @@ publish = false
 rd-api = { path = "crates/rd-api" }
 rd-fs = { path = "crates/rd-fs" }
 rd-auth = { path = "crates/rd-auth" }
-rd-helper-proto = { path = "crates/rd-helper-proto" }
+rd-root-proto = { path = "crates/rd-root-proto" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "sync", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "sync", "io-util", "time"] }
 axum = { version = "0.8", features = ["ws"] }
 # Starts a program on a pseudo-terminal, for the terminal app. It has a safe
 # API, so this project needs no unsafe code for it.

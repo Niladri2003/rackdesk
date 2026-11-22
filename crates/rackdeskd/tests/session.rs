@@ -256,6 +256,50 @@ async fn weak_new_passwords_are_refused() {
 
 // ---------- Lockout ----------
 
+/// The password check waits for a free slot. Requests sent at the same
+/// moment must not all pass the lock while they wait.
+#[tokio::test]
+async fn sign_ins_sent_at_once_do_not_pass_the_lock() {
+    let server = server().await;
+    let attempts = (0..20).map(|_| sign_in_call("not the password").send(&server));
+    let statuses: Vec<StatusCode> = futures_util::future::join_all(attempts)
+        .await
+        .iter()
+        .map(|res| res.status())
+        .collect();
+    let checked = statuses
+        .iter()
+        .filter(|s| **s == StatusCode::UNAUTHORIZED)
+        .count();
+    let refused = statuses
+        .iter()
+        .filter(|s| **s == StatusCode::TOO_MANY_REQUESTS)
+        .count();
+    assert_eq!((checked, refused), (5, 15), "got {statuses:?}");
+}
+
+/// A name that is not the account is not written to the audit log: a
+/// password typed in the username field would end up there.
+#[tokio::test]
+async fn the_audit_log_holds_sign_out_and_no_unknown_username() {
+    let server = server().await;
+    call(Method::POST, "/api/v1/session")
+        .body(serde_json::json!({"username": "typed-a-secret-here", "password": "x"}))
+        .send(&server)
+        .await;
+    let cookie = sign_in_and_change(&server).await;
+    let res = call(Method::DELETE, "/api/v1/session")
+        .cookie(&cookie)
+        .send(&server)
+        .await;
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    let log = std::fs::read_to_string(server.dir.path().join("audit.log")).unwrap();
+    assert!(!log.contains("typed-a-secret-here"), "log: {log}");
+    assert!(log.contains("(unknown user)"), "log: {log}");
+    assert!(log.contains(r#""action":"session.sign_out""#), "log: {log}");
+}
+
 #[tokio::test]
 async fn five_failures_lock_the_ip_address() {
     let server = server().await;

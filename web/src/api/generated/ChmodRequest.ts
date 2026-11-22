@@ -9,6 +9,6 @@ export type ChmodRequest = { path: string,
  */
 mode: number, 
 /**
- * Do it through the root helper.
+ * Do it through the root program.
  */
 elevate: boolean, };

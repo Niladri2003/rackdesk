@@ -13,15 +13,34 @@
   font-display: swap;
   src: url('../assets/fonts/GeistMono.woff2') format('woff2');
 }
+/* The arrow and branch symbols that many shell prompts use ("Powerline").
+   Normal fonts do not have them, and the terminal would show empty boxes.
+   The range limits this font to those 7 symbols. */
+@font-face {
+  font-family: 'Powerline Symbols';
+  font-display: swap;
+  src: url('../assets/fonts/PowerlineSymbols.otf') format('opentype');
+  unicode-range: U+E0A0-E0A2, U+E0B0-E0B3;
+}
 
 :root {
   --font-ui: 'Onest', system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
+  /* The terminal: after the app font comes the bundled font with the prompt
+     arrows, then fonts with more prompt icons, for users who have one
+     installed. */
+  --font-term:
+    'Geist Mono', 'Powerline Symbols', 'MesloLGS NF', 'Symbols Nerd Font Mono', 'Hack Nerd Font Mono', 'JetBrainsMono Nerd Font Mono', 'FiraCode Nerd Font Mono', Menlo,
+    'DejaVu Sans Mono', monospace;
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
   --radius-xl: 14px;
+  /* The terminal is dark in both themes, like a terminal on a desktop. */
+  --term-bg: #16181f;
+  --term-fg: #e6e8f0;
+  --term-selection: #4a5180;
   --motion-fast: 120ms ease-out;
   --motion-base: 160ms ease-out;
   --motion-window: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);

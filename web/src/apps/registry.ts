@@ -12,9 +12,9 @@ import { Editor } from './editor/Editor'
 import { TRASH } from './files/changes'
 import { Files } from './files/Files'
 import { baseName } from './files/paths'
-import { Placeholder } from './Placeholder'
 import { Preview } from './preview/Preview'
 import { Settings } from './settings/Settings'
+import { Terminal } from './terminal/Terminal'
 import { sectionName } from './settings/sections'
 
 /** What an app receives. It does not get the position or size of its
@@ -93,8 +93,9 @@ export const APPS: Record<AppId, AppDef> = {
     icon: SquareTerminal,
     size: { w: 900, h: 560 },
     singleton: false,
-    built: false,
-    content: { kind: 'builtin', component: Placeholder },
+    built: true,
+    content: { kind: 'builtin', component: Terminal },
+    detail: (params) => (params.cwd ? baseName(params.cwd) : ''),
   },
   settings: {
     id: 'settings',

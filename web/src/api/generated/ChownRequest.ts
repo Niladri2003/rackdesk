@@ -13,6 +13,6 @@ owner: string | null,
  */
 group: string | null, 
 /**
- * Do it through the root helper.
+ * Do it through the root program.
  */
 elevate: boolean, };

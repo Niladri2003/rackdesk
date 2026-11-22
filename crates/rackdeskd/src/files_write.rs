@@ -59,6 +59,9 @@ pub struct Upload {
     size: u64,
     conflict: Conflict,
     last_used: Instant,
+    /// Held while a chunk is added. 2 chunks of 1 upload sent at the same
+    /// moment would both pass the check of the length.
+    appending: std::sync::Arc<tokio::sync::Mutex<()>>,
 }
 
 type Reply<T> = Result<Json<T>, ApiErr>;
@@ -334,6 +337,7 @@ pub async fn upload_begin(
         size: req.size,
         conflict: req.conflict,
         last_used: Instant::now(),
+        appending: Default::default(),
     };
     let begin = upload.clone();
     blocking(&state, move |root| {
@@ -405,6 +409,8 @@ pub async fn upload_chunk(
 ) -> Result<Response, ApiErr> {
     let Query(q) = query?;
     let upload = state.touch_upload(&id).ok_or_else(no_such_upload)?;
+    let appending = upload.appending.clone();
+    let _one_chunk_at_a_time = appending.lock().await;
     let append = upload.clone();
     let appended = blocking(&state, move |root| {
         root.upload_append(&append.dir, &append.temp, q.offset, &body, append.size)

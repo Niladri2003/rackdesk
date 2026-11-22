@@ -6,8 +6,8 @@
 //!
 //! - The route needs a session, like every other route. A WebSocket is not
 //!   covered by the CSRF check for POST, so the origin is checked here.
-//! - Who starts the shell depends on the mode. `helper`: the root helper
-//!   starts it, as the Linux user the helper was configured with. `direct`:
+//! - Who starts the shell depends on the mode. `as-user`: the root program
+//!   starts it, as the Linux user the root program was configured with. `direct`:
 //!   the server starts it, as its own user. `off`: no terminal. `off` is
 //!   the default.
 //! - A shell lives while its window is open. If the connection is lost, the
@@ -27,7 +27,7 @@ use axum::extract::{Extension, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
-use rd_helper_proto::{encode_stream_frame, StreamFrame};
+use rd_root_proto::{encode_stream_frame, StreamFrame};
 use serde::Deserialize;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -55,17 +55,26 @@ pub enum TermMode {
     /// The server starts the shell, as the user that runs the server. For
     /// development, and for a machine with 1 user.
     Direct,
-    /// The root helper starts the shell, as the Linux user it was
+    /// The root program starts the shell, as the Linux user it was
     /// configured with.
-    Helper,
+    AsUser,
 }
+
+/// A window that takes no output for this long is dropped. The shell keeps
+/// running, and the window gets the missed output when it connects again.
+const WINDOW_STALL: Duration = Duration::from_secs(5);
+
+/// Gives each connected window a number.
+static NEXT_WINDOW: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// A message to the task that owns a shell.
 enum Control {
-    /// A window connected. Output goes to this channel from now on.
-    Attach(mpsc::Sender<Out>),
-    /// The window went away without closing the terminal.
-    Detach,
+    /// A window connected. Output goes to this channel from now on. The
+    /// number names the window.
+    Attach(u64, mpsc::Sender<Out>),
+    /// The window with this number went away without closing the terminal.
+    /// It is ignored if another window has connected since.
+    Detach(u64),
     Input(Vec<u8>),
     Resize {
         cols: u16,
@@ -130,14 +139,14 @@ struct Shell {
 
 enum ShellInput {
     Direct(pty_process::OwnedWritePty),
-    Helper(tokio::net::unix::OwnedWriteHalf),
+    Root(tokio::net::unix::OwnedWriteHalf),
 }
 
 impl ShellInput {
     async fn write(&mut self, bytes: Vec<u8>) -> std::io::Result<()> {
         match self {
             ShellInput::Direct(pty) => pty.write_all(&bytes).await,
-            ShellInput::Helper(socket) => {
+            ShellInput::Root(socket) => {
                 socket
                     .write_all(&encode_stream_frame(&StreamFrame::Input(bytes)))
                     .await
@@ -150,7 +159,7 @@ impl ShellInput {
             ShellInput::Direct(pty) => pty
                 .resize(pty_process::Size::new(rows, cols))
                 .map_err(std::io::Error::other),
-            ShellInput::Helper(socket) => {
+            ShellInput::Root(socket) => {
                 socket
                     .write_all(&encode_stream_frame(&StreamFrame::Resize { cols, rows }))
                     .await
@@ -248,24 +257,38 @@ pub async fn connect(
     let (id, control) = match existing {
         Some(found) => found,
         None => {
-            if state.terminals().len() >= MAX_TERMINALS {
-                return Err(terminal_error(
-                    StatusCode::TOO_MANY_REQUESTS,
-                    "too_many_terminals",
-                    "Too many terminals are open. Close one first.",
-                ));
+            let id = rd_auth::random_hex(16).map_err(ApiErr::internal)?;
+            let (control, receiver) = mpsc::channel(256);
+            // The place is taken under the lock, before the shell starts.
+            // Requests sent at the same moment can't all pass the limit.
+            {
+                let mut entries = state.terminals().lock();
+                if entries.len() >= MAX_TERMINALS {
+                    return Err(terminal_error(
+                        StatusCode::TOO_MANY_REQUESTS,
+                        "too_many_terminals",
+                        "Too many terminals are open. Close one first.",
+                    ));
+                }
+                entries.insert(
+                    id.clone(),
+                    Entry {
+                        session: actor.session.clone(),
+                        control: control.clone(),
+                    },
+                );
             }
             let started = match mode {
-                TermMode::Helper => match state.helper() {
-                    Some(helper) => helper.shell(cols, rows).await.map(|socket| {
+                TermMode::AsUser => match state.root() {
+                    Some(program) => program.shell(cols, rows).await.map(|socket| {
                         let (output, input) = socket.into_split();
                         Shell {
                             output: Box::new(output),
-                            input: ShellInput::Helper(input),
+                            input: ShellInput::Root(input),
                             child: None,
                         }
                     }),
-                    None => Err(crate::helper::no_helper()),
+                    None => Err(crate::root::no_root()),
                 },
                 _ => {
                     let cwd = match &q.cwd {
@@ -275,11 +298,10 @@ pub async fn connect(
                     start_direct(cols, rows, cwd)
                 }
             };
-            let id = rd_auth::random_hex(16).map_err(ApiErr::internal)?;
             let target = format!(
                 "{id} ({})",
-                if mode == TermMode::Helper {
-                    "helper"
+                if mode == TermMode::AsUser {
+                    "as-user"
                 } else {
                     "direct"
                 }
@@ -288,16 +310,13 @@ pub async fn connect(
             state
                 .audit()
                 .record(&actor, "terminal.open", &target, result);
-            let shell = started?;
-
-            let (control, receiver) = mpsc::channel(256);
-            state.terminals().lock().insert(
-                id.clone(),
-                Entry {
-                    session: actor.session.clone(),
-                    control: control.clone(),
-                },
-            );
+            let shell = match started {
+                Ok(shell) => shell,
+                Err(e) => {
+                    state.terminals().lock().remove(&id);
+                    return Err(e);
+                }
+            };
             tokio::spawn(run_shell(
                 state.clone(),
                 actor.clone(),
@@ -335,7 +354,8 @@ async fn run_shell(
     mut shell: Shell,
     mut control: mpsc::Receiver<Control>,
 ) {
-    let mut window: Option<mpsc::Sender<Out>> = None;
+    // The connected window: its number and the channel to it.
+    let mut window: Option<(u64, mpsc::Sender<Out>)> = None;
     let mut backlog: VecDeque<u8> = VecDeque::new();
     // Set while no window is connected.
     let mut detached_since = Some(Instant::now());
@@ -355,25 +375,34 @@ async fn run_shell(
                 backlog.extend(&buf[..n]);
                 let extra = backlog.len().saturating_sub(BACKLOG_BYTES);
                 backlog.drain(..extra);
-                if let Some(to_window) = &window {
-                    if to_window.send(Out::Data(buf[..n].to_vec())).await.is_err() {
+                if let Some((_, to_window)) = &window {
+                    // A slow window slows the shell down, which is wanted. A
+                    // window that takes nothing for WINDOW_STALL is dropped,
+                    // so this task goes back to its other work: a stop
+                    // request and the session check.
+                    let sent = to_window
+                        .send_timeout(Out::Data(buf[..n].to_vec()), WINDOW_STALL)
+                        .await;
+                    if sent.is_err() {
                         window = None;
                         detached_since = Some(Instant::now());
                     }
                 }
             }
             message = control.recv() => match message {
-                Some(Control::Attach(to_window)) => {
+                Some(Control::Attach(number, to_window)) => {
                     // What the window missed, or all of it after a reload.
                     let seen: Vec<u8> = backlog.iter().copied().collect();
-                    if seen.is_empty() || to_window.send(Out::Data(seen)).await.is_ok() {
-                        window = Some(to_window);
+                    if seen.is_empty() || to_window.try_send(Out::Data(seen)).is_ok() {
+                        window = Some((number, to_window));
                         detached_since = None;
                     }
                 }
-                Some(Control::Detach) => {
-                    window = None;
-                    detached_since = Some(Instant::now());
+                Some(Control::Detach(number)) => {
+                    if window.as_ref().is_some_and(|(current, _)| *current == number) {
+                        window = None;
+                        detached_since = Some(Instant::now());
+                    }
                 }
                 Some(Control::Input(bytes)) => {
                     // Typing counts as use of the session, like a request.
@@ -389,6 +418,9 @@ async fn run_shell(
                 Some(Control::Stop) | None => break,
             },
             _ = session_check.tick() => {
+                // Reading the account notices a password reset made on the
+                // server, which ends every session.
+                let _ = state.credentials().await;
                 if !state.sessions().is_live(&actor.session, Instant::now()) {
                     break;
                 }
@@ -406,8 +438,10 @@ async fn run_shell(
         .audit()
         .record(&actor, "terminal.close", &target, Ok(()));
     state.terminals().lock().remove(&id);
-    if let Some(to_window) = window {
-        let _ = to_window.send(Out::Exit).await;
+    if let Some((_, to_window)) = window {
+        // The shell is gone, so nothing is lost if a stalled window does
+        // not take this message.
+        let _ = to_window.send_timeout(Out::Exit, WINDOW_STALL).await;
     }
 }
 
@@ -430,8 +464,13 @@ async fn serve_window(
     if to_browser.send(Message::Text(ready.into())).await.is_err() {
         return;
     }
+    let number = NEXT_WINDOW.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let (to_window, mut output) = mpsc::channel(64);
-    if control.send(Control::Attach(to_window)).await.is_err() {
+    if control
+        .send(Control::Attach(number, to_window))
+        .await
+        .is_err()
+    {
         return;
     }
     // The size of this window. It can differ from the one the shell had.
@@ -481,7 +520,7 @@ async fn serve_window(
         }
     }
     if !closed_by_user {
-        let _ = control.send(Control::Detach).await;
+        let _ = control.send(Control::Detach(number)).await;
     }
     writer.abort();
 }

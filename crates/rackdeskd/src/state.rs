@@ -3,7 +3,7 @@
 use crate::audit::AuditLog;
 use crate::error::ApiErr;
 use crate::files_write::Upload;
-use crate::helper::Helper;
+use crate::root::RootClient;
 use crate::term::{TermMode, Terminals};
 use rd_auth::limiter::{Limiter, Policy};
 use rd_auth::session::SessionStore;
@@ -28,8 +28,8 @@ pub struct Config {
     pub files_root: PathBuf,
     /// Who starts the shell of a terminal. `Off`: no terminal.
     pub terminal: TermMode,
-    /// The socket of the root helper. `None`: no action is done as root.
-    pub helper_socket: Option<PathBuf>,
+    /// The socket of the root program. `None`: no action is done as root.
+    pub root_socket: Option<PathBuf>,
     /// Largest file that can be uploaded, in bytes.
     pub max_upload_bytes: u64,
     /// True when browsers reach the server over HTTPS. The session cookie is
@@ -54,7 +54,7 @@ struct Inner {
     files: Arc<Root>,
     searches: Semaphore,
     audit: AuditLog,
-    helper: Option<Helper>,
+    root: Option<RootClient>,
     terminals: Terminals,
     /// Uploads in progress, by id.
     uploads: std::sync::Mutex<HashMap<String, Upload>>,
@@ -105,7 +105,7 @@ impl AppState {
             .map_err(|e| rd_auth::AuthError::Store(format!("audit log: {e}")))?;
         let stamp = FileStamp::read(store.path()).await;
         let dummy_hash = rd_auth::hash_password(&rd_auth::generate_password()?)?;
-        let helper = config.helper_socket.clone().map(Helper::new);
+        let root = config.root_socket.clone().map(RootClient::new);
         Ok(Self(Arc::new(Inner {
             config,
             store,
@@ -117,7 +117,7 @@ impl AppState {
             files: Arc::new(files),
             searches: Semaphore::new(SEARCHES_AT_ONCE),
             audit,
-            helper,
+            root,
             terminals: Terminals::default(),
             uploads: std::sync::Mutex::new(HashMap::new()),
             dummy_hash,
@@ -138,9 +138,9 @@ impl AppState {
         self.0.searches.acquire().await.map_err(ApiErr::internal)
     }
 
-    /// The root helper, if this server has one.
-    pub fn helper(&self) -> Option<&Helper> {
-        self.0.helper.as_ref()
+    /// The root program, if this server has one.
+    pub fn root(&self) -> Option<&RootClient> {
+        self.0.root.as_ref()
     }
 
     /// The running shells of the terminal app.

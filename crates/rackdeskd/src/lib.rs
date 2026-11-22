@@ -7,12 +7,14 @@
 pub mod audit;
 pub mod auth;
 pub mod csrf;
+pub mod datadir;
+pub mod demo;
 pub mod error;
 pub mod files;
 pub mod files_write;
-pub mod helper;
 pub mod ids;
 pub mod perms;
+pub mod root;
 pub mod state;
 pub mod term;
 pub mod tls;

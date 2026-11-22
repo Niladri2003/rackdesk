@@ -1,9 +1,9 @@
 // The sections of the Settings app, and what the one search can find in each.
-import { Info, Palette, User } from 'lucide-react'
+import { History, Info, Palette, User } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { t } from '../../i18n'
 
-type SectionId = 'account' | 'appearance' | 'about'
+type SectionId = 'account' | 'appearance' | 'activity' | 'about'
 
 interface Section {
   id: SectionId
@@ -34,6 +34,12 @@ export const SECTIONS: Section[] = [
       { label: s.appearance.accent, keywords: 'color colour' },
       { label: s.appearance.wallpaper, keywords: 'background' },
     ],
+  },
+  {
+    id: 'activity',
+    name: s.activity.name,
+    icon: History,
+    entries: [{ label: s.activity.name, keywords: 'audit log history changes sign-in' }],
   },
   {
     id: 'about',

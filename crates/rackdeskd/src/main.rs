@@ -7,7 +7,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use rackdeskd::term::TermMode;
 use rackdeskd::tls::{self, TlsMode};
-use rackdeskd::{AppState, Config};
+use rackdeskd::{datadir, demo, AppState, Config};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -30,14 +30,14 @@ struct Args {
     #[arg(long, env = "RACKDESK_FILES_ROOT", default_value = "/")]
     files_root: PathBuf,
     /// Who starts the shell of the terminal app. "off": no terminal.
-    /// "helper": rackdesk-helper starts it, as the user it was configured
+    /// "as-user": rackdesk-root starts it, as the user it was configured
     /// with. "direct": this program starts it, as its own user.
     #[arg(long, env = "RACKDESK_TERMINAL", value_enum, default_value = "off")]
     terminal: TermMode,
-    /// The socket of rackdesk-helper, for actions that need root. Without
+    /// The socket of rackdesk-root, for actions that need root. Without
     /// it, no action is done as root.
-    #[arg(long, env = "RACKDESK_HELPER_SOCKET")]
-    helper_socket: Option<PathBuf>,
+    #[arg(long, env = "RACKDESK_ROOT_SOCKET")]
+    root_socket: Option<PathBuf>,
     /// Largest file that can be uploaded, in bytes. The default is 20 GiB.
     #[arg(long, env = "RACKDESK_MAX_UPLOAD_BYTES", default_value_t = 20 * 1024 * 1024 * 1024)]
     max_upload_bytes: u64,
@@ -55,6 +55,11 @@ struct Args {
     /// cookie is marked Secure.
     #[arg(long, env = "RACKDESK_BEHIND_PROXY")]
     behind_proxy: bool,
+    /// Try RackDesk with sample files. The file browser sees a temporary
+    /// folder only, there is no terminal, and everything is deleted when the
+    /// server stops.
+    #[arg(long)]
+    demo: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -62,8 +67,13 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Replace the admin password with a new random one and print it.
-    /// Run it on the server, as root or as the user that runs rackdeskd.
+    /// Run it on the server, as the user that runs rackdeskd.
     ResetPassword,
+    /// Create the data folder and the admin account, and print the password.
+    /// It does nothing if the account exists. An installer runs it, so the
+    /// password is shown to the person who installs and not written to the
+    /// log of the service.
+    Init,
 }
 
 #[tokio::main]
@@ -74,22 +84,74 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| "rackdeskd=info".into()),
         )
         .init();
-    let args = Args::parse();
+    let mut args = Args::parse();
+
+    let demo = if args.demo {
+        if args.command.is_some() {
+            anyhow::bail!("--demo starts the server. It can't be used with a command");
+        }
+        demo::check(&demo::Request {
+            listen: &args.listen,
+            terminal: args.terminal,
+            root_socket: args.root_socket.is_some(),
+        })
+        .map_err(anyhow::Error::msg)?;
+        let demo = demo::Demo::create().context("creating the demo folders")?;
+        args.data_dir = demo.data_dir();
+        args.files_root = demo.files_root();
+        args.max_upload_bytes = args.max_upload_bytes.min(demo::MAX_UPLOAD_BYTES);
+        Some(demo)
+    } else {
+        None
+    };
+
+    datadir::refuse_root_on_a_folder_of_another_user(&args.data_dir)?;
+    datadir::prepare(&args.data_dir)?;
     let store = rd_auth::CredentialStore::new(&args.data_dir);
 
-    if let Some(Command::ResetPassword) = args.command {
-        let (_, password) = store.reset().context("resetting the admin password")?;
-        print_password("RackDesk admin password reset", &password);
-        println!("  A running server signs out every session at its next request.");
-        println!();
-        return Ok(());
+    match args.command {
+        Some(Command::ResetPassword) => {
+            let (_, password) = store.reset().context("resetting the admin password")?;
+            print_password("RackDesk admin password reset", &password);
+            println!("  A running server signs out every session at its next request.");
+            println!();
+            return Ok(());
+        }
+        Some(Command::Init) => {
+            let (_, initial) = store
+                .load_or_init()
+                .context("loading or creating the admin account")?;
+            match initial {
+                Some(password) => print_password("RackDesk admin account created", &password),
+                None => {
+                    println!("The admin account exists already. Nothing was changed.");
+                    println!("For a new password, run: rackdeskd reset-password");
+                }
+            }
+            return Ok(());
+        }
+        None => {}
     }
 
     let (creds, initial) = store
         .load_or_init()
         .context("loading or creating the admin account")?;
     if let Some(password) = initial {
-        print_password("RackDesk admin account created", &password);
+        if output_goes_to_the_journal() {
+            // Everything this process prints is kept in the system journal,
+            // where other users of the machine may read it.
+            println!(
+                "RackDesk admin account created. The password is not printed here, because this output is kept in the system journal. Get a password with: rackdeskd --data-dir {} reset-password",
+                args.data_dir.display()
+            );
+        } else {
+            print_password("RackDesk admin account created", &password);
+        }
+    }
+    if demo.is_some() {
+        println!("  Demo mode. The file browser shows sample files only.");
+        println!("  Everything is deleted when you stop the server with Ctrl C.");
+        println!();
     }
 
     // An absolute path with links resolved, so the home folder and the mount
@@ -110,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(unix)]
     if rustix::process::geteuid().as_raw() == 0 {
         tracing::warn!(
-            "rackdeskd is running as root. Run it as a user with no special rights, and use rackdesk-helper for actions that need root"
+            "rackdeskd is running as root. Run it as a user with no special rights, and use rackdesk-root for actions that need root"
         );
     }
 
@@ -132,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
             data_dir: args.data_dir.clone(),
             files_root,
             max_upload_bytes: args.max_upload_bytes,
-            helper_socket: args.helper_socket.clone(),
+            root_socket: args.root_socket.clone(),
             terminal: args.terminal,
             https: use_tls || args.behind_proxy,
             behind_proxy: args.behind_proxy,
@@ -165,7 +227,7 @@ async fn main() -> anyhow::Result<()> {
         let handle = axum_server::Handle::new();
         let on_signal = handle.clone();
         tokio::spawn(async move {
-            let _ = tokio::signal::ctrl_c().await;
+            stop_signal().await;
             on_signal.graceful_shutdown(Some(Duration::from_secs(10)));
         });
         tracing::info!("rackdeskd listening on https://{}", args.listen);
@@ -180,16 +242,72 @@ async fn main() -> anyhow::Result<()> {
             .with_context(|| format!("binding {}", args.listen))?;
         tracing::info!("rackdeskd listening on http://{}", args.listen);
         axum::serve(listener, app)
-            .with_graceful_shutdown(async {
-                let _ = tokio::signal::ctrl_c().await;
-            })
+            .with_graceful_shutdown(stop_signal())
             .await?;
     }
+    // The demo folders are deleted here, after the last request.
+    drop(demo);
     Ok(())
 }
 
-/// Printed once, to the terminal only. Never logged through tracing, so the
-/// password doesn't end up in log files or journald.
+/// Resolves when the server is asked to stop: Ctrl C in a terminal, or the
+/// stop signal that a service manager sends.
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        if let Ok(mut terminate) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = terminate.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+/// True when the standard output of this process is the stream that systemd
+/// connected to the journal.
+///
+/// systemd sets `JOURNAL_STREAM` to the device and inode number of that
+/// stream, as "device:inode". Every child process inherits the variable, also
+/// one whose output goes to a pipe or a file. So the variable alone proves
+/// nothing: the numbers are compared with those of the real standard output.
+fn output_goes_to_the_journal() -> bool {
+    let Some(value) = std::env::var_os("JOURNAL_STREAM") else {
+        return false;
+    };
+    let numbers = value.to_str().and_then(|v| v.split_once(':'));
+    let parsed = numbers.and_then(|(device, inode)| {
+        Some((device.parse::<u64>().ok()?, inode.parse::<u64>().ok()?))
+    });
+    // A value that can't be read, or an output that can't be examined, is
+    // treated as the journal: not printing the password is the safe side.
+    let Some((device, inode)) = parsed else {
+        return true;
+    };
+    stdout_is(device, inode).unwrap_or(true)
+}
+
+/// Compares the device and inode number of the standard output with the
+/// given ones. `None` if they can't be read.
+#[cfg(unix)]
+fn stdout_is(device: u64, inode: u64) -> Option<bool> {
+    let stat = rustix::fs::fstat(std::io::stdout()).ok()?;
+    // The types of these fields differ between systems.
+    #[allow(clippy::unnecessary_cast)]
+    Some(stat.st_dev as u64 == device && stat.st_ino as u64 == inode)
+}
+
+#[cfg(not(unix))]
+fn stdout_is(_: u64, _: u64) -> Option<bool> {
+    None
+}
+
+/// Printed once, to the terminal only. Never logged through tracing, and not
+/// printed at all when the output is kept in the journal, so the password
+/// doesn't end up in log files.
 fn print_password(title: &str, password: &rd_auth::InitialPassword) {
     println!();
     println!("  {title}");

@@ -209,7 +209,10 @@ export function Desktop({ session, onSignedOut, onSessionEnded }: Props) {
         else if (e.key === 'ArrowLeft') setSwitcher((open + wins.length - 1) % wins.length)
         return
       }
-      if (mod && !e.altKey && e.key.toLowerCase() === 'k') {
+      // In a terminal, Ctrl+K is a shell key (delete to the end of the
+      // line). There the search opens with Cmd+K, or with its button.
+      const inTerminal = e.target instanceof Element && e.target.closest('.terminal') !== null
+      if (mod && !e.altKey && e.key.toLowerCase() === 'k' && !(inTerminal && !e.metaKey)) {
         e.preventDefault()
         setLauncher((v) => !v)
         return

@@ -14,7 +14,7 @@ uid: number | null, gid: number | null,
  */
 owner: string | null, group: string | null, 
 /**
- * True if this server has a helper for actions that need root. The UI
+ * True if this server has a root program for actions that need root. The UI
  * then offers to try a refused change again with `elevate`.
  */
 can_elevate: boolean, };
