@@ -1130,14 +1130,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
-name = "rackdesk-helper"
+name = "rackdesk-root"
 version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
  "pty-process",
  "rd-fs",
- "rd-helper-proto",
+ "rd-root-proto",
  "rustix",
  "serde_json",
  "tempfile",
@@ -1155,12 +1155,12 @@ dependencies = [
  "http-body-util",
  "mime_guess",
  "pty-process",
- "rackdesk-helper",
+ "rackdesk-root",
  "rcgen",
  "rd-api",
  "rd-auth",
  "rd-fs",
- "rd-helper-proto",
+ "rd-root-proto",
  "rust-embed",
  "rustix",
  "rustls-pki-types",
@@ -1262,7 +1262,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rd-helper-proto"
+name = "rd-root-proto"
 version = "0.0.1"
 dependencies = [
  "serde",

@@ -7,7 +7,7 @@
 
 use crate::audit::Actor;
 use crate::error::ApiErr;
-use crate::helper::no_helper;
+use crate::root::no_root;
 use crate::state::AppState;
 use axum::body::Body;
 use axum::extract::rejection::QueryRejection;
@@ -302,7 +302,7 @@ pub struct DownloadQuery {
     /// agrees only for the types in [`inline_type`].
     #[serde(default)]
     inline: bool,
-    /// Read the file through the root helper. For a file that the server
+    /// Read the file through the root program. For a file that the server
     /// itself may not read.
     #[serde(default)]
     elevate: bool,
@@ -429,7 +429,7 @@ pub async fn download(
     if q.elevate {
         let started = download_as_root(&state, &q.path, &name).await;
         let result = started.as_ref().map(|_| ()).map_err(ApiErr::code);
-        state.audit().record(&actor, "helper.read", &q.path, result);
+        state.audit().record(&actor, "root.read", &q.path, result);
         return started;
     }
     let path = q.path;
@@ -511,13 +511,13 @@ pub async fn download(
     Ok(res)
 }
 
-/// Sends a file that the root helper reads, part by part. Always as a
+/// Sends a file that the root program reads, part by part. Always as a
 /// download, never shown in the page.
 async fn download_as_root(state: &AppState, path: &str, name: &str) -> Result<Response, ApiErr> {
-    use rd_helper_proto::{Request, Response as Answer, MAX_READ_BYTES};
-    let helper = state.helper().ok_or_else(no_helper)?.clone();
+    use rd_root_proto::{Request, Response as Answer, MAX_READ_BYTES};
+    let program = state.root().ok_or_else(no_root)?.clone();
     // Asked first, so a wrong path gets a JSON error and not an empty file.
-    let (stat, _) = helper
+    let (stat, _) = program
         .call(Request::Stat {
             path: path.to_owned(),
         })
@@ -536,7 +536,7 @@ async fn download_as_root(state: &AppState, path: &str, name: &str) -> Result<Re
                 offset,
                 len: MAX_READ_BYTES,
             };
-            match helper.call(part).await {
+            match program.call(part).await {
                 // An empty part is the end of the file.
                 Ok((_, data)) if !data.is_empty() => {
                     if writer.write_all(&data).await.is_err() {
@@ -582,7 +582,11 @@ pub async fn download_zip(
     // Checked first, so a path that is wrong gets a JSON error and not a
     // broken archive.
     let path = q.path.clone();
-    let entry = blocking(&state, move |root| root.entry(&path)).await?;
+    let entry = blocking(&state, move |root| {
+        root.zip_check(&path)?;
+        root.entry(&path)
+    })
+    .await?;
     let name = if entry.name == "/" {
         "files".to_owned()
     } else {

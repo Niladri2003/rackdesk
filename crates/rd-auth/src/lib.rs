@@ -172,39 +172,35 @@ impl CredentialStore {
 
     /// Writes atomically (temp file + rename) with owner-only permissions.
     ///
-    /// The new file keeps the owner of the file it replaces. Without this, a
-    /// password reset run as root would leave a file the server can't read.
+    /// The temporary file has a random name and is created with `create_new`,
+    /// which fails if anything has that name. So a link placed in the folder
+    /// can't send this write to another file.
+    ///
+    /// Run it as the owner of the folder. `rackdeskd` refuses to work as root
+    /// on a folder of another user.
     pub fn save(&self, creds: &Credentials) -> Result<(), AuthError> {
         let dir = self
             .path
             .parent()
             .ok_or_else(|| AuthError::Store("no parent dir".into()))?;
         fs::create_dir_all(dir).map_err(|e| AuthError::Store(e.to_string()))?;
-        let tmp = self.path.with_extension("json.tmp");
+        let tmp = dir.join(format!(".credentials-{}.tmp", random_hex(8)?));
         let mut opts = fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
+        opts.write(true).create_new(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
             opts.mode(0o600);
         }
-        let mut f = opts
-            .open(&tmp)
-            .map_err(|e| AuthError::Store(e.to_string()))?;
         let body = serde_json::to_vec_pretty(creds).map_err(|e| AuthError::Store(e.to_string()))?;
-        f.write_all(&body)
-            .and_then(|_| f.sync_all())
-            .map_err(|e| AuthError::Store(e.to_string()))?;
-        #[cfg(unix)]
-        if let Ok(old) = fs::metadata(&self.path) {
-            use std::os::unix::fs::MetadataExt;
-            let new = f.metadata().map_err(|e| AuthError::Store(e.to_string()))?;
-            if (old.uid(), old.gid()) != (new.uid(), new.gid()) {
-                std::os::unix::fs::fchown(&f, Some(old.uid()), Some(old.gid()))
-                    .map_err(|e| AuthError::Store(e.to_string()))?;
-            }
-        }
-        fs::rename(&tmp, &self.path).map_err(|e| AuthError::Store(e.to_string()))
+        let written = opts
+            .open(&tmp)
+            .and_then(|mut f| f.write_all(&body).and_then(|_| f.sync_all()))
+            .and_then(|_| fs::rename(&tmp, &self.path));
+        written.map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            AuthError::Store(e.to_string())
+        })
     }
 }
 

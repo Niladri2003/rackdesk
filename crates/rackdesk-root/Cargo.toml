@@ -1,5 +1,5 @@
 [package]
-name = "rackdesk-helper"
+name = "rackdesk-root"
 description = "The small root program that does a fixed list of actions for rackdeskd"
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 rd-fs.workspace = true
-rd-helper-proto.workspace = true
+rd-root-proto.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 rustix.workspace = true

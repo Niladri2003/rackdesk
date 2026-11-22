@@ -156,7 +156,7 @@ export function fileUrl(path: string, inline = false): string {
   return `/api/v1/fs/download?${params}`
 }
 
-/** The address that downloads a file through the root helper. For a file
+/** The address that downloads a file through the root program. For a file
  * that the server itself may not read. */
 export const elevatedFileUrl = (path: string) => `/api/v1/fs/download?${new URLSearchParams({ path, elevate: 'true' })}`
 

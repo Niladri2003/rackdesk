@@ -4,6 +4,7 @@
 // WebP in 2 widths. The script reads their addresses from `data-frames`.
 import { getImage } from 'astro:assets'
 import InstallCommand from './InstallCommand.astro'
+import { INSTALL_COMMAND } from '../site.ts'
 
 // In the order in which the sequence shows them. The last one in LAST is
 // also the picture that shows without the script.
@@ -48,7 +49,7 @@ const last = frames[LAST]
       <div class="shell" aria-hidden="true">
         <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="bar-name">ssh admin@server</span></div>
         <div class="shell-body" id="shell">
-          <p class="in"><span class="ps">admin@server:~$</span> <span class="pasted">curl -fsSL https://github.com/Niladri2003/rackdesk/releases/latest/download/install.sh | sh</span><i class="caret"></i></p>
+          <p class="in"><span class="ps">admin@server:~$</span> <span class="pasted">{INSTALL_COMMAND}</span><i class="caret"></i></p>
           <p class="o">Checking the release signature <b>ok</b></p>
           <p class="o">Installing rackdeskd <b>ok</b></p>
           <p class="o">Starting the service <b>ok</b></p>
@@ -56,7 +57,7 @@ const last = frames[LAST]
           <p class="o ind">username: admin</p>
           <p class="o ind">password: Tq7mPz4KxW9cLb2RvN8s</p>
           <p class="o ind">You'll be asked to change it at the next sign-in.</p>
-          <p class="o gap">rackdeskd listening on <u id="shell-url">http://127.0.0.1:7171</u></p>
+          <p class="o gap">RackDesk is running at <u id="shell-url">http://127.0.0.1:7171</u></p>
         </div>
       </div>
 

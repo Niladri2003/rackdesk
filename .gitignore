@@ -7,3 +7,10 @@
 /dev-data
 *.swp
 .DS_Store
+
+# The private half of the release key. Never commit it.
+release-key.private.pem
+/dist
+
+# A release folder signed with a throwaway key, for a test on a real server.
+/rd-release

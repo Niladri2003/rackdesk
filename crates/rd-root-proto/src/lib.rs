@@ -1,19 +1,19 @@
-//! The messages between the server (`rackdeskd`) and the root helper
-//! (`rackdesk-helper`), and how they are put on the socket.
+//! The messages between the server (`rackdeskd`) and the root program
+//! (`rackdesk-root`), and how they are put on the socket.
 //!
-//! The helper runs as root, so this is the most sensitive input in the
+//! The root program runs as root, so this is the most sensitive input in the
 //! project (docs/security/SECURITY.md, P1). The format is small on purpose:
 //!
 //! - A message is a frame: 4 bytes with the length (big-endian), then that
 //!   many bytes of JSON.
 //! - A request frame is at most [`MAX_REQUEST_BYTES`]. A longer one is
 //!   refused before any of it is read into memory.
-//! - [`Request`] is the full list of what the helper can do. An unknown
+//! - [`Request`] is the full list of what the root program can do. An unknown
 //!   action or an unknown field is an error, not something to ignore.
 //! - The answer to `Read` is a frame with [`Response::Data`], then the raw
 //!   bytes of the file part.
 //! - After `Shell` is answered with `Ok`, the connection is the terminal:
-//!   the helper sends the output of the shell as raw bytes, and the server
+//!   the root program sends the output of the shell as raw bytes, and the server
 //!   sends stream frames (see [`write_stream_frame`]) with input and with
 //!   new window sizes.
 
@@ -27,12 +27,12 @@ pub const MAX_RESPONSE_BYTES: u32 = 64 * 1024;
 /// Largest part of a file in 1 `Read` answer.
 pub const MAX_READ_BYTES: u32 = 1024 * 1024;
 
-/// Everything the helper can be asked to do. Paths are beneath the files
-/// root of the helper, in the same form as in the HTTP API.
+/// Everything the root program can be asked to do. Paths are beneath the files
+/// root of the root program, in the same form as in the HTTP API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Request {
-    /// Checks that the helper answers.
+    /// Checks that the root program answers.
     Ping,
     /// Describes an entry: its kind, size, owner and permission bits.
     Stat { path: String },
@@ -47,7 +47,7 @@ pub enum Request {
     /// Reads a part of a regular file. `len` is at most [`MAX_READ_BYTES`].
     Read { path: String, offset: u64, len: u32 },
     /// Starts a login shell on a terminal of `cols` x `rows` characters.
-    /// The Linux user is the one the helper was started with. The request
+    /// The Linux user is the one the root program was started with. The request
     /// can't name another.
     Shell { cols: u16, rows: u16 },
 }
@@ -184,7 +184,7 @@ pub fn write_response(
     Ok(())
 }
 
-/// A frame from the server to the helper while a shell runs.
+/// A frame from the server to the root program while a shell runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamFrame {
     /// Bytes that the user typed.

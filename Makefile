@@ -1,7 +1,7 @@
 # RackDesk development commands. Run `make` or `make help` to list them.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run web site site-build build check fmt fmt-check clippy test web-check e2e test-linux deny new-password clean
+.PHONY: help setup run demo web site site-build build check fmt fmt-check clippy test web-check e2e test-linux test-release local-release deny new-password clean
 
 DATA_DIR ?= ./dev-data
 
@@ -13,6 +13,9 @@ setup: ## Install the web UI packages
 
 run: ## Start the server on 127.0.0.1:7171, with the terminal running as your own user
 	cargo run -p rackdeskd -- --data-dir $(DATA_DIR) --terminal direct
+
+demo: ## Start the server with sample files only. Nothing on this machine is shown or changed
+	cargo run -p rackdeskd -- --demo
 
 web: ## Start the UI dev server on :5173 (needs `make run` in another terminal)
 	cd web && npm run dev
@@ -50,8 +53,14 @@ e2e: ## Run the browser tests against a temporary server (downloads a test brows
 	cargo build -p rackdeskd
 	cd web && npx playwright install chromium && npm run e2e
 
-test-linux: ## Lint and test the Linux-only code (the root helper) in a container. Needs Docker
+test-linux: ## Lint and test the Linux-only code (the root program) in a container. Needs Docker
 	./scripts/test-linux.sh
+
+test-release: ## Build a release and test install, update and uninstall in a container with systemd. Needs Docker
+	./scripts/test-release.sh
+
+local-release: ## Build a release signed with a throwaway key into rd-release/. ARCH=x86_64 or aarch64, default: this machine. Needs Docker
+	./scripts/local-release.sh $(ARCH)
 
 deny: ## Check dependencies for advisories and licences (needs cargo-deny)
 	cargo deny check
@@ -61,4 +70,4 @@ new-password: ## Delete the dev account, so the next `make run` prints a new pas
 
 clean: ## Delete build output
 	cargo clean
-	rm -rf web/dist site/dist site/.astro
+	rm -rf web/dist site/dist site/.astro dist rd-release

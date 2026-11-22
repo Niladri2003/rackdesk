@@ -91,6 +91,9 @@ fn check_id(id: &str) -> Result<(), FsError> {
     Ok(())
 }
 
+/// The largest info file that is read. A real one holds a path and a date.
+const MAX_INFO_BYTES: u64 = 64 * 1024;
+
 struct TrashDirs {
     files: Dir,
     info: Dir,
@@ -224,10 +227,14 @@ impl Root {
 
     /// The `Path=` value of an item, decoded.
     fn trash_origin(&self, dirs: &TrashDirs, id: &str) -> Option<String> {
-        let text = dirs
-            .info
-            .read_to_string(format!("{id}{INFO_SUFFIX}"))
-            .ok()?;
+        let name = format!("{id}{INFO_SUFFIX}");
+        // Only a small regular file is read. A link, a device or a huge
+        // file placed in the trash folder is skipped.
+        let meta = dirs.info.symlink_metadata(&name).ok()?;
+        if !meta.is_file() || meta.len() > MAX_INFO_BYTES {
+            return None;
+        }
+        let text = dirs.info.read_to_string(&name).ok()?;
         let line = text.lines().find_map(|l| l.strip_prefix("Path="))?;
         decode(line.trim())
     }

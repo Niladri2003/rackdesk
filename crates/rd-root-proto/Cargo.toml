@@ -1,6 +1,6 @@
 [package]
-name = "rd-helper-proto"
-description = "Messages between rackdeskd and rackdesk-helper"
+name = "rd-root-proto"
+description = "Messages between rackdeskd and rackdesk-root"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

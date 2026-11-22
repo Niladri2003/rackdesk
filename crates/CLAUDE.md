@@ -10,11 +10,11 @@ Dependencies point one way. `rackdeskd` depends on `rd-fs` and `rd-auth`. Those 
 | `rd-api` | Request and response types, enums, `ApiError` | I/O, logic, anything not sent over the wire |
 | `rd-fs` | Every operation on user files, as a method on `Root` | HTTP types, auth |
 | `rd-auth` | Passwords, the credential store, sessions (`session`), the limit on password guessing (`limiter`) | HTTP types, file browsing |
-| `rd-helper-proto` | The `Request` and `Response` of the root helper, and the frame format | Anything that touches files |
-| `rackdesk-helper` | The root program: the socket, the check of the caller, and `handle()` | Async code, HTTP, new actions without a security plan row |
+| `rd-root-proto` | The `Request` and `Response` of the root program, and the frame format | Anything that touches files |
+| `rackdesk-root` | The root program: the socket, the check of the caller, and `handle()` | Async code, HTTP, new actions without a security plan row |
 | `rackdeskd` | Routes, extractors, middleware, start-up, config | Path handling, password handling |
 
-A new area of work (terminal, services, helper protocol) gets its own `rd-*` crate, so it can be tested without the server.
+A new area of work (terminal, services, protocol of the root program) gets its own `rd-*` crate, so it can be tested without the server.
 
 ## Adding or changing an API type
 1. Define it in `crates/rd-api/src/lib.rs` with `#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]` and `#[ts(export)]`.
@@ -51,11 +51,11 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - Blocking work (file listing, argon2) runs in `tokio::task::spawn_blocking`, not on the async runtime.
 - Security headers are set once in `router()` in `crates/rackdeskd/src/lib.rs`. Loosening the CSP needs a line in the security plan saying why.
 
-## The root helper
-- `Request` in `rd-helper-proto` is the full list of what can be done as root. A new action needs a row in the security plan first, then a case in `handle()`, then a row in the test `every_action_stays_beneath_the_files_root`.
-- The helper stays small: no async runtime, no HTTP, no config file. Every path goes through `rd_fs::Root`.
-- The server calls the helper only for a request with `elevate` (`perms.rs`, `files.rs`). Never as a silent fallback.
-- Every helper call is recorded in the audit log with an action name that starts with `helper.`.
+## The root program
+- `Request` in `rd-root-proto` is the full list of what can be done as root. A new action needs a row in the security plan first, then a case in `handle()`, then a row in the test `every_action_stays_beneath_the_files_root`.
+- The root program stays small: no async runtime, no HTTP, no config file. Every path goes through `rd_fs::Root`.
+- The server calls the root program only for a request with `elevate` (`perms.rs`, `files.rs`). Never as a silent fallback.
+- Every call to the root program is recorded in the audit log with an action name that starts with `root.`.
 - Code that needs Linux gets `#[cfg(target_os = "linux")]`. Check it with `make test-linux`.
 
 ## The terminal
@@ -64,9 +64,16 @@ A new area of work (terminal, services, helper protocol) gets its own `rd-*` cra
 - A WebSocket route checks the origin itself with `csrf::same_origin`. The CSRF layer covers POST, PUT, PATCH and DELETE only.
 - A test that needs a WebSocket binds a real socket. See `listen()` and `open()` in `tests/common/mod.rs`.
 
+## The data folder
+- A change to the layout of the data folder (a new file format, a renamed file) is a new step in `MIGRATIONS` in `crates/rackdeskd/src/datadir.rs`, with a test. A step must be safe to run again after it failed half way.
+- A file in the data folder is written under a temporary name made with `create_new`, then renamed. The service user can place a link in that folder, and `create_new` never follows one.
+- `rackdeskd` refuses to run as root on a data folder that another user owns. Don't add code that changes the owner of a file there.
+- The first password is never printed when the output goes to the journal (`JOURNAL_STREAM` is set). `rackdeskd init` and `reset-password` print it, because a person runs them.
+- Demo mode (`demo.rs`) must not reach real files. A new setting that widens what the server can reach gets a line in `demo::check`.
+
 ## The audit log
 - A handler that changes something takes `Extension(actor): Extension<Actor>` and passes its result through `audited()` (`files_write.rs`), or calls `state.audit().record()`.
-- A line holds paths and names. Never a password, a session id or file content.
+- A line holds paths and names. Never a password, a session id or file content. A typed username that is not the account is recorded as "(unknown user)".
 
 ## Secrets
 - Compare secrets with a constant-time function. Password checks go through `rd_auth::verify_password`.

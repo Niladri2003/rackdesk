@@ -1,0 +1,55 @@
+# The RackDesk server. It runs as a user with no special rights.
+#
+# Settings are in /etc/rackdesk/rackdesk.env. To run the server as another
+# user, the installer writes a drop-in file with User= and Group=.
+[Unit]
+Description=RackDesk server
+Documentation=https://github.com/Niladri2003/rackdesk
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=rackdesk
+Group=rackdesk
+Environment=RACKDESK_DATA_DIR=/var/lib/rackdesk
+EnvironmentFile=-/etc/rackdesk/rackdesk.env
+ExecStart=@BINDIR@/rackdeskd
+Restart=on-failure
+RestartSec=2
+
+# /var/lib/rackdesk, owned by the service user, for that user only.
+StateDirectory=rackdesk
+StateDirectoryMode=0700
+
+# Limits on what the server process can do, in addition to the rights of its
+# user. A terminal in "direct" mode is a child of this process and has the
+# same limits: for example, sudo does not work in it. A terminal in "as-user"
+# mode is started by rackdesk-root and does not have them.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=full
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Not set on purpose, because the file browser shows the server as it is:
+# ProtectHome (home folders would be hidden) and PrivateTmp (/tmp would be
+# an empty private folder).
+
+[Install]
+WantedBy=multi-user.target

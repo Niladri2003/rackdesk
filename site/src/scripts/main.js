@@ -1,5 +1,5 @@
 // The landing page script: the copy buttons, the diagram of the server and
-// the helper, the start sequence of the hero, and the light that follows the
+// the root program, the start sequence of the hero, and the light that follows the
 // pointer over the app cards. The page is complete without it.
 
 const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -44,15 +44,15 @@ const watch = (selector, change) => {
   ).observe(part)
 }
 
-// ---------- The diagram of the server and the helper ----------
+// ---------- The diagram of the server and the root program ----------
 // It shows 1 request after the other while it is on screen. Some pass and
 // some are refused.
 
 const requests = [
   { ask: 'Change the owner of /srv/app', answer: 'Done. Written to the audit log.', ok: true },
-  { ask: 'Run a command as root', answer: 'Refused. The helper has no such action.', ok: false },
+  { ask: 'Run a command as root', answer: 'Refused. The root program has no such action.', ok: false },
   { ask: 'Read /var/log/auth.log', answer: 'Done. Written to the audit log.', ok: true },
-  { ask: 'Change a file outside the allowed folder', answer: 'Refused. The path leaves the folder of the helper.', ok: false },
+  { ask: 'Change a file outside the allowed folder', answer: 'Refused. The path leaves the folder of the root program.', ok: false },
   { ask: 'Open a terminal', answer: 'Started as the user you chose. Written to the audit log.', ok: true },
 ]
 

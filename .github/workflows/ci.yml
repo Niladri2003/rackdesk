@@ -14,6 +14,20 @@ jobs:
       - run: cargo test --workspace
       - name: Generated TypeScript types are committed and current
         run: git diff --exit-code web/src/api/generated
+  # The root program and a few controls can only be tested as root. This runs
+  # those tests in a container, as `make test-linux` does.
+  linux-root:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint and test the Linux-only code as root
+        run: ./scripts/test-linux.sh
+  packaging:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the shell scripts
+        run: shellcheck -x packaging/*.sh packaging/scripts/*.sh scripts/*.sh
   web:
     runs-on: ubuntu-24.04
     defaults: { run: { working-directory: web } }

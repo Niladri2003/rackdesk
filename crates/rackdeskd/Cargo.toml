@@ -11,7 +11,7 @@ publish.workspace = true
 rd-api.workspace = true
 rd-fs.workspace = true
 rd-auth.workspace = true
-rd-helper-proto.workspace = true
+rd-root-proto.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
@@ -32,12 +32,13 @@ rcgen.workspace = true
 rustls-pki-types.workspace = true
 sha2.workspace = true
 time.workspace = true
+# The 2 folders of demo mode, deleted when the server stops.
+tempfile.workspace = true
 
 [dev-dependencies]
 tokio-tungstenite.workspace = true
-rackdesk-helper = { path = "../rackdesk-helper" }
+rackdesk-root = { path = "../rackdesk-root" }
 zip.workspace = true
-tempfile.workspace = true
 tower.workspace = true
 http-body-util.workspace = true
 

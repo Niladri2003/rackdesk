@@ -1,6 +1,6 @@
 //! The audit log: a record of who changed what.
 //!
-//! Every change to files, every root action through the helper, and every
+//! Every change to files, every root action through the root program, and every
 //! sign-in, sign-out and password change adds 1 line to
 //! `<data_dir>/audit.log`. A line is a JSON object, so it is easy to search
 //! and to parse. Lines are only added. The server never rewrites or
@@ -24,13 +24,23 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 /// Who made a request. The session check puts it on the request.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Actor {
     pub username: String,
     pub ip: IpAddr,
     /// The id of the sign-in session. It ties a terminal to its session.
     /// It is a secret and is never written to the log.
     pub session: String,
+}
+
+/// Written by hand, so that printing an `Actor` never shows the session id.
+impl std::fmt::Debug for Actor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Actor")
+            .field("username", &self.username)
+            .field("ip", &self.ip)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Serialize)]

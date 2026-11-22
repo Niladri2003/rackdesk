@@ -1,45 +1,45 @@
-//! `rackdesk-helper`: the part of RackDesk that runs as root.
+//! `rackdesk-root`: the part of RackDesk that runs as root.
 //!
 //! The server (`rackdeskd`) runs as a user with no special rights. When the
 //! admin asks for an action that needs root, the server sends a request to
 //! this program over a local socket. The full list of actions is
-//! `rd_helper_proto::Request`: describe an entry, set permission bits, set
+//! `rd_root_proto::Request`: describe an entry, set permission bits, set
 //! the owner, and read a part of a file.
 //!
 //! What limits a request (docs/security/SECURITY.md, P1):
 //!
-//! - Only the configured user may connect. The kernel tells the helper who
+//! - Only the configured user may connect. The kernel tells the root program who
 //!   is on the other end of the socket (`SO_PEERCRED`); the client can't
 //!   choose that value.
 //! - Every path is resolved by `rd_fs::Root`, beneath the files root that
-//!   the helper was started with. `..` and symlinks can't leave it.
+//!   the root program was started with. `..` and symlinks can't leave it.
 //! - Only the 9 plain permission bits can be set. No set-uid or set-gid bit.
 //! - Only regular files are read, at most 1 MiB per request.
-//! - A shell is started only as the Linux user that the helper was started
+//! - A shell is started only as the Linux user that the root program was started
 //!   with (`--shell-user`). A request can't name a user. Without that
-//!   option the helper starts no shell at all, and it starts a root shell
+//!   option the root program starts no shell at all, and it starts a root shell
 //!   only with `--allow-root-shell`.
 //! - Every action is written to the log with the id of the calling process.
 //!
-//! What it does not limit: beneath its files root, the helper does what it
+//! What it does not limit: beneath its files root, the root program does what it
 //! is asked. A server that an attacker controls can use it to read any file
-//! there or to change its owner. Start the helper with the smallest files
+//! there or to change its owner. Start the root program with the smallest files
 //! root that the admin needs.
 
 mod shell;
 
 use rd_fs::{FsError, Root};
-use rd_helper_proto::{
-    read_request, write_response, ProtoError, Request, Response, MAX_READ_BYTES,
-};
+use rd_root_proto::{read_request, write_response, ProtoError, Request, Response, MAX_READ_BYTES};
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Connections served at once. More are closed at once.
-const MAX_CONNECTIONS: usize = 8;
+/// Connections served at once. More are closed at once. A terminal shell
+/// holds 1 connection while it runs, and the server opens at most 16 shells.
+/// The rest is for file requests.
+const MAX_CONNECTIONS: usize = 24;
 /// A connection that sends nothing for this long is closed.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -62,7 +62,7 @@ fn bad_request(message: &str) -> Response {
     }
 }
 
-/// How the helper was started.
+/// How the root program was started.
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Only this user id is served.
@@ -149,13 +149,13 @@ pub fn peer_ids(stream: &UnixStream) -> std::io::Result<(u32, i32)> {
     Ok((cred.uid.as_raw(), cred.pid.as_raw_nonzero().get()))
 }
 
-/// The helper is for Linux. Other systems have no `SO_PEERCRED`, and without
-/// it the helper can't know who is calling.
+/// The root program is for Linux. Other systems have no `SO_PEERCRED`, and without
+/// it the root program can't know who is calling.
 #[cfg(not(target_os = "linux"))]
 pub fn peer_ids(_stream: &UnixStream) -> std::io::Result<(u32, i32)> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "rackdesk-helper runs on Linux only",
+        "rackdesk-root runs on Linux only",
     ))
 }
 
@@ -167,7 +167,7 @@ fn log(peer_pid: i32, request: &Request, response: &Response) {
         _ => "ok",
     };
     let line = serde_json::json!({
-        "helper": request.name(),
+        "action": request.name(),
         "path": request.path(),
         "pid": peer_pid,
         "result": result,
@@ -183,14 +183,14 @@ fn serve_connection(mut stream: UnixStream, root: &Root, options: &Options) {
         Ok((uid, pid)) => {
             eprintln!(
                 "{}",
-                serde_json::json!({"helper": "refused", "uid": uid, "pid": pid})
+                serde_json::json!({"action": "refused", "uid": uid, "pid": pid})
             );
             return;
         }
         Err(e) => {
             eprintln!(
                 "{}",
-                serde_json::json!({"helper": "refused", "error": e.to_string()})
+                serde_json::json!({"action": "refused", "error": e.to_string()})
             );
             return;
         }
@@ -214,7 +214,7 @@ fn serve_connection(mut stream: UnixStream, root: &Root, options: &Options) {
             let result = outcome.as_ref().err().map_or("ok", |e| e.as_str());
             eprintln!(
                 "{}",
-                serde_json::json!({"helper": "shell", "user": options.shell_user, "pid": peer_pid, "result": result})
+                serde_json::json!({"action": "shell", "user": options.shell_user, "pid": peer_pid, "result": result})
             );
             return;
         }
@@ -428,7 +428,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn only_the_allowed_user_is_served() {
-        use rd_helper_proto::{read_response, write_request};
+        use rd_root_proto::{read_response, write_request};
         let (base, root) = fixture();
         let me = rustix::process::getuid().as_raw();
         let ask = |allow_uid: u32, name: &str| {

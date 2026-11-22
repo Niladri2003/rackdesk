@@ -132,7 +132,7 @@ ol {
   color: var(--soft);
 }
 
-/* ---------- The server and the helper ---------- */
+/* ---------- The server and the root program ---------- */
 
 .flow {
   --bad: #ff7a85;
@@ -165,7 +165,7 @@ ol {
   font-size: 13.5px;
   color: var(--soft);
 }
-.node-helper {
+.node-root {
   border-color: var(--ink);
 }
 .acts {
@@ -236,8 +236,8 @@ ol {
   color: var(--bad);
 }
 
-/* One request: a dot travels to the server, then to the helper, and the
-   helper shows the result. The script adds "run" again for each request. */
+/* One request: a dot travels to the server, then to the root program, and the
+   root program shows the result. The script adds "run" again for each request. */
 .flow.run .link:nth-of-type(2) .pkt {
   animation: travel 1200ms 100ms ease-in-out both;
 }
@@ -247,10 +247,10 @@ ol {
 .flow.run .node-server {
   animation: touch 500ms 1250ms ease-out;
 }
-.flow.run .node-helper {
+.flow.run .node-root {
   animation: accept 900ms 2550ms ease-out;
 }
-.flow.run.no .node-helper {
+.flow.run.no .node-root {
   animation: refuse 900ms 2550ms ease-out;
 }
 .flow.run .flow-res {

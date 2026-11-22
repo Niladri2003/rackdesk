@@ -2,7 +2,7 @@
 // bits. The owner and the bits can be changed here.
 //
 // A change is tried with the rights of the server first. If the system
-// refuses and the server has a root helper, the dialog offers to apply the
+// refuses and the server has a root program, the dialog offers to apply the
 // change as administrator.
 import { CircleAlert, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -167,7 +167,7 @@ export function Properties({ path, close }: { path: string; close: () => void })
       {refused && (
         <div className="props-admin" role="alert">
           <ShieldAlert size={16} aria-hidden="true" />
-          <span>{details.can_elevate ? f.needsAdmin : `${f.needsAdmin} ${t.errors.no_helper}`}</span>
+          <span>{details.can_elevate ? f.needsAdmin : `${f.needsAdmin} ${t.errors.no_root_program}`}</span>
           {details.can_elevate && (
             <button type="button" className="btn btn-small btn-danger" disabled={busy} onClick={() => void apply(true)}>
               {f.applyAsAdmin}

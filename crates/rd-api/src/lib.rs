@@ -173,7 +173,7 @@ pub struct EntryDetails {
     /// Their names, if the server knows them.
     pub owner: Option<String>,
     pub group: Option<String>,
-    /// True if this server has a helper for actions that need root. The UI
+    /// True if this server has a root program for actions that need root. The UI
     /// then offers to try a refused change again with `elevate`.
     pub can_elevate: bool,
 }
@@ -185,7 +185,7 @@ pub struct ChmodRequest {
     pub path: String,
     /// The 9 plain permission bits, such as 0o644 (420 as a number).
     pub mode: u32,
-    /// Do it through the root helper.
+    /// Do it through the root program.
     #[serde(default)]
     pub elevate: bool,
 }
@@ -199,7 +199,7 @@ pub struct ChownRequest {
     pub owner: Option<String>,
     /// A group name or a numeric id. `None` leaves the group as it is.
     pub group: Option<String>,
-    /// Do it through the root helper.
+    /// Do it through the root program.
     #[serde(default)]
     pub elevate: bool,
 }

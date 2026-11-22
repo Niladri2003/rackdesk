@@ -1,0 +1,40 @@
+# The RackDesk root program. It runs as root and does a fixed list of actions for
+# the RackDesk server: file details, permissions, owner, reading a protected
+# file, and starting a terminal shell. It has no network port.
+#
+# It is not enabled by default. The installer enables it with --with-root or
+# --shell-user. Settings are in /etc/rackdesk/rackdesk.env.
+[Unit]
+Description=RackDesk root program (root actions for the RackDesk server)
+Documentation=https://github.com/Niladri2003/rackdesk
+Before=rackdeskd.service
+
+[Service]
+Type=exec
+User=root
+Environment=RACKDESK_USER=rackdesk
+EnvironmentFile=-/etc/rackdesk/rackdesk.env
+# The root program serves 1 user id only: that of the user that runs the server.
+# "$$" is how a unit file writes 1 "$" for the shell.
+ExecStart=/bin/sh -c 'exec @BINDIR@/rackdesk-root --socket /run/rackdesk/root.sock --allow-uid "$$(id -u "$$RACKDESK_USER")"'
+Restart=on-failure
+RestartSec=2
+
+# /run/rackdesk, for the socket file.
+RuntimeDirectory=rackdesk
+RuntimeDirectoryMode=0755
+
+# The root program needs no network. It talks over the socket file only.
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+# Not set on purpose: NoNewPrivileges and a system call filter. A terminal
+# shell is a child of this process, and the user of that shell must be able
+# to use sudo and every normal command.
+
+[Install]
+WantedBy=multi-user.target

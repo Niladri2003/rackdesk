@@ -26,7 +26,7 @@ npm run preview    # serve dist/ on 127.0.0.1:8100. Stop it with: npx astro prev
 | `src/components/` | 1 file per section: `Hero`, `Stats`, `Apps`, `Security`, `Planned`, `Install`. Also `Header`, `Footer`, `Mark` (the logo) and `InstallCommand` |
 | `src/site.ts` | The repository URL and the install command |
 | `src/styles/site.css` | All styles. Colours are CSS variables on `:root` |
-| `src/scripts/main.js` | All script: copy buttons, the helper diagram, the start sequence |
+| `src/scripts/main.js` | All script: copy buttons, the root program diagram, the start sequence |
 | `src/assets/shots/` | The 9 screenshots of RackDesk, as JPEG source files |
 | `public/` | Fonts and icons. Astro copies them unchanged |
 | `check-output.mjs` | Fails the build if a built page breaks the CSP |
@@ -42,8 +42,8 @@ The Content-Security-Policy header in `netlify.toml` allows scripts, styles, fon
 
 ## Content rules
 - **The page says only what is true.** An app that is not built is in the "Planned" section and marked as planned. The 4 numbers match `docs/ROADMAP.md`.
-- **The install command and the repository URL are written in `src/site.ts` only.** Components import them. The install URL is a guess until the installer exists.
-- **In the terminal of the start sequence**, the account block is the exact text `rackdeskd` prints at first start (`print_password` in `crates/rackdeskd/src/main.rs`). Change both together. The 3 "ok" lines above it are invented until the installer exists.
+- **The install command and the repository URL are written in `src/site.ts` only.** Components import them. The command works once a release is published on GitHub.
+- **The terminal of the start sequence shows the real output of the installer.** The 3 "ok" lines and the last line come from `packaging/install.sh`. The account block is the text `rackdeskd` prints (`print_password` in `crates/rackdeskd/src/main.rs`). Change the page when either changes.
 - **The pictures of RackDesk are real screenshots.** Do not draw the UI by hand.
 
 ## The start sequence

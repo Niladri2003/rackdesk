@@ -1,7 +1,7 @@
 //! Starts a login shell on a pseudo-terminal, as the configured Linux user,
 //! and passes bytes between it and the server.
 //!
-//! The helper does not switch users itself. It runs `runuser -l <user>`
+//! The root program does not switch users itself. It runs `runuser -l <user>`
 //! (or `su -l <user>` where `runuser` is missing). That program is part of
 //! every Linux system, and it sets the user, all of the user's groups and
 //! the login environment in the way the system expects.
@@ -9,7 +9,7 @@
 use crate::Options;
 use pty_process::blocking::{Command, Pty};
 use pty_process::Size;
-use rd_helper_proto::{read_stream_frame, write_response, Response, StreamFrame};
+use rd_root_proto::{read_stream_frame, write_response, Response, StreamFrame};
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
@@ -59,7 +59,7 @@ pub(crate) fn shell_user<'a>(options: &'a Options, passwd: &str) -> Result<&'a s
 
 fn refuse(stream: &mut UnixStream, code: &str) -> Result<(), String> {
     let message = match code {
-        "terminal_off" => "this helper was started without a terminal user",
+        "terminal_off" => "this program was started without a terminal user",
         "permission_denied" => "a root terminal is not allowed on this server",
         "not_found" => "the terminal user does not exist",
         _ => "the terminal could not start",
@@ -203,7 +203,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn a_shell_runs_a_command_and_ends_when_the_connection_closes() {
-        use rd_helper_proto::{read_response, write_request, write_stream_frame, Request};
+        use rd_root_proto::{read_response, write_request, write_stream_frame, Request};
         use std::os::unix::net::UnixListener;
         use std::time::{Duration, Instant};
         if rustix::process::getuid().as_raw() != 0 {
@@ -211,7 +211,7 @@ mod tests {
             return;
         }
         let dir = tempfile::tempdir().unwrap();
-        let socket = dir.path().join("helper.sock");
+        let socket = dir.path().join("root.sock");
         let listener = UnixListener::bind(&socket).unwrap();
         let root = rd_fs::Root::open(dir.path()).unwrap();
         std::thread::spawn(move || crate::serve(listener, root, options_for_root()));

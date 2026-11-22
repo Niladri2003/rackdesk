@@ -185,6 +185,15 @@ fn write_zip<W: Write + Seek>(
 impl Root {
     /// Writes a zip of a file or folder to `out`, as it is made. `out` need
     /// not support seeking, so this can feed a download.
+    /// Checks that `zip_to` can start on this path. A handler calls it
+    /// before it sends the first byte, so a wrong path gets an error and not
+    /// a broken archive.
+    pub fn zip_check(&self, ui_path: &str) -> Result<(), FsError> {
+        let source = self.place(ui_path)?;
+        source.dir.symlink_metadata(&source.name)?;
+        Ok(())
+    }
+
     pub fn zip_to<W: Write>(
         &self,
         ui_path: &str,
@@ -212,6 +221,10 @@ impl Root {
     ) -> Result<String, FsError> {
         let source = self.place(from)?;
         source.dir.symlink_metadata(&source.name)?;
+        // An archive inside its own source would be read into itself.
+        if clean_path(to)?.starts_with(clean_path(from)?) {
+            return Err(FsError::InvalidPath("the target is inside the source"));
+        }
         let target = self.settle(self.place(to)?, conflict)?;
         let temp = temp_name("zip");
         let mut options = OpenOptions::new();

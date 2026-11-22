@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the Linux-only checks in a container, as root.
 #
-# The root helper asks the kernel who is on the other end of its socket
+# The root program asks the kernel who is on the other end of its socket
 # (SO_PEERCRED). That exists on Linux only, so this code is not compiled on
 # macOS. This script lints and tests it on Linux from any machine with
 # Docker. CI runs the same commands on its Linux machine.
@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CRATES=(-p rd-fs -p rd-helper-proto -p rackdesk-helper -p rackdeskd)
+CRATES=(-p rd-fs -p rd-root-proto -p rackdesk-root -p rackdeskd)
 
 docker run --rm \
   -v "$PWD":/src:ro \

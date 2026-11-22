@@ -1,22 +1,22 @@
 //! Owner and permission bits: read them, and change them.
 //!
 //! A change is tried with the rights of the server first. If the system
-//! refuses it and the request has `elevate`, the server asks the root helper
-//! (`helper.rs`). Without `elevate` the helper is never used, so an action
+//! refuses it and the request has `elevate`, the server asks the root program
+//! (`root.rs`). Without `elevate` the root program is never used, so an action
 //! as root is always something the admin asked for.
 
 use crate::audit::Actor;
 use crate::error::ApiErr;
 use crate::files::{blocking, PathQuery};
-use crate::helper::no_helper;
 use crate::ids;
+use crate::root::no_root;
 use crate::state::AppState;
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{Extension, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use rd_api::{ChmodRequest, ChownRequest, EntryDetails};
-use rd_helper_proto::Request;
+use rd_root_proto::Request;
 
 /// `GET /api/v1/fs/properties`
 pub async fn properties(
@@ -34,11 +34,11 @@ pub async fn properties(
         gid: Some(ids.1),
         owner: ids::user_name(ids.0),
         group: ids::group_name(ids.1),
-        can_elevate: state.helper().is_some(),
+        can_elevate: state.root().is_some(),
     }))
 }
 
-/// Records the change, with "helper." in the action name if it was done as
+/// Records the change, with "root." in the action name if it was done as
 /// root.
 fn record(
     state: &AppState,
@@ -49,7 +49,7 @@ fn record(
     done: &Result<(), ApiErr>,
 ) {
     let action = if elevate {
-        format!("helper.{action}")
+        format!("root.{action}")
     } else {
         format!("fs.{action}")
     };
@@ -66,15 +66,15 @@ pub async fn chmod(
     let Json(req) = body?;
     let target = format!("{} mode {:o}", req.path, req.mode);
     let done = if req.elevate {
-        match state.helper() {
-            Some(helper) => helper
+        match state.root() {
+            Some(program) => program
                 .call(Request::Chmod {
                     path: req.path,
                     mode: req.mode,
                 })
                 .await
                 .map(|_| ()),
-            None => Err(no_helper()),
+            None => Err(no_root()),
         }
     } else {
         blocking(&state, move |root| root.set_mode(&req.path, req.mode)).await
@@ -115,8 +115,8 @@ pub async fn chown(
         req.group.as_deref().unwrap_or("-")
     );
     let done = if req.elevate {
-        match state.helper() {
-            Some(helper) => helper
+        match state.root() {
+            Some(program) => program
                 .call(Request::Chown {
                     path: req.path,
                     uid,
@@ -124,7 +124,7 @@ pub async fn chown(
                 })
                 .await
                 .map(|_| ()),
-            None => Err(no_helper()),
+            None => Err(no_root()),
         }
     } else {
         blocking(&state, move |root| root.set_owner(&req.path, uid, gid)).await

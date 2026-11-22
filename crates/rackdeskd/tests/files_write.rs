@@ -654,7 +654,7 @@ async fn changes_and_sign_ins_are_written_to_the_audit_log() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn chmod_sets_plain_bits_and_root_actions_need_a_helper() {
+async fn chmod_sets_plain_bits_and_root_actions_need_the_root_program() {
     use std::os::unix::fs::PermissionsExt;
     let (server, cookie) = setup().await;
     let file = server.files_root().join("notes.txt");
@@ -681,7 +681,7 @@ async fn chmod_sets_plain_bits_and_root_actions_need_a_helper() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert_eq!(mode(), 0o640);
 
-    // This test server has no helper. Nothing is done as root.
+    // This test server has no root program. Nothing is done as root.
     let res = post(
         &server,
         &cookie,
@@ -689,7 +689,7 @@ async fn chmod_sets_plain_bits_and_root_actions_need_a_helper() {
         json!({"path": "/notes.txt", "mode": 0o600, "elevate": true}),
     )
     .await;
-    assert_eq!(error_code(res).await, "no_helper");
+    assert_eq!(error_code(res).await, "no_root_program");
     let res = call(
         Method::GET,
         "/api/v1/fs/download?path=/notes.txt&elevate=true",
@@ -697,6 +697,6 @@ async fn chmod_sets_plain_bits_and_root_actions_need_a_helper() {
     .cookie(&cookie)
     .send(&server)
     .await;
-    assert_eq!(error_code(res).await, "no_helper");
+    assert_eq!(error_code(res).await, "no_root_program");
     assert_eq!(mode(), 0o640);
 }

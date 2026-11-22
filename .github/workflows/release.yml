@@ -1,0 +1,119 @@
+# Builds and signs a release when a version tag is pushed (for example v1.0.0).
+#
+# The result is a draft release on GitHub. Look at it, then publish it by
+# hand. The install command uses the newest published release.
+#
+# It needs 1 secret: RELEASE_SIGNING_KEY, the private key made by
+# scripts/make-release-key.sh. The matching public key is in
+# packaging/release-key.pem and inside packaging/install.sh.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+
+env:
+  NFPM_VERSION: 2.49.0
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            nfpm_file: Linux_x86_64
+            nfpm_sha256: 2afaa5ffb5e3493402e31e7c67a5a1fb42133e3f66fc315ca0051934125561c7
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            nfpm_file: Linux_arm64
+            nfpm_sha256: d4eee71839e92c68cbd3b101640bad32d2856fc551acae0635be9118e48c9d9c
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag is the version in Cargo.toml
+        run: |
+          version="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "The tag is $GITHUB_REF_NAME and Cargo.toml says $version. Set the version first." >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: web/package-lock.json }
+      - name: Build the UI
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.arch }}-unknown-linux-musl" }
+      - name: Install the C compiler for musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Install nfpm, checked against a pinned checksum
+        run: |
+          file="nfpm_${NFPM_VERSION}_${{ matrix.nfpm_file }}.tar.gz"
+          curl -fsSL -o "$file" "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/$file"
+          echo "${{ matrix.nfpm_sha256 }}  $file" | sha256sum -c -
+          sudo tar -xzf "$file" -C /usr/local/bin nfpm
+      - name: Build the release files
+        run: scripts/build-release.sh ${{ matrix.arch }}
+      - name: Measure the size and the memory use
+        run: scripts/measure.sh "target/${{ matrix.arch }}-unknown-linux-musl/release/rackdeskd" | tee "dist/measured-${{ matrix.arch }}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: release-*
+          merge-multiple: true
+      - name: Add the installer
+        run: |
+          if grep -q "^RELEASE_KEY=''" packaging/install.sh; then
+            echo "packaging/install.sh holds no release key. Run scripts/make-release-key.sh and commit the result." >&2
+            exit 1
+          fi
+          cp packaging/install.sh dist/install.sh
+      - name: Write and sign the list of checksums
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          cd dist
+          sha256sum -- *.tar.gz *.deb *.rpm install.sh > SHA256SUMS
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          openssl dgst -sha256 -sign "$key" -out SHA256SUMS.sig SHA256SUMS
+          # The installer checks with the public key in the repository. A
+          # signature made with another key must not be published.
+          openssl dgst -sha256 -verify ../packaging/release-key.pem -signature SHA256SUMS.sig SHA256SUMS
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$(mktemp)"
+          # The part of CHANGELOG.md for this version.
+          awk -v version="${GITHUB_REF_NAME#v}" '
+            /^## / { printing = ($2 == version) ; next }
+            printing { print }
+          ' CHANGELOG.md > "$notes"
+          {
+            echo
+            echo "## Measured"
+            echo '```'
+            cat dist/measured-*.txt
+            echo '```'
+          } >> "$notes"
+          gh release create "$GITHUB_REF_NAME" --draft --title "RackDesk ${GITHUB_REF_NAME#v}" --notes-file "$notes" \
+            dist/*.tar.gz dist/*.deb dist/*.rpm dist/install.sh dist/SHA256SUMS dist/SHA256SUMS.sig

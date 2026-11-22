@@ -152,35 +152,48 @@ pub async fn sign_in(
 ) -> Result<Response, ApiErr> {
     let Json(login) = body?;
     let now = Instant::now();
+    let creds = state.credentials().await?;
+    let known_user = login.username == creds.username;
     let actor = Actor {
-        // The name that was typed. It may not be an account.
-        username: login.username.chars().take(64).collect(),
+        // A name that is not an account is not written to the log. People
+        // type a password in the wrong field.
+        username: if known_user {
+            creds.username.clone()
+        } else {
+            "(unknown user)".to_owned()
+        },
         ip: client_ip(&state, &headers, peer),
         session: String::new(),
     };
     let ip = actor.ip.to_string();
-    let creds = state.credentials().await?;
-    let known_user = login.username == creds.username;
 
     // While a key is locked the password is not checked at all, so a locked
     // client learns nothing from its attempts.
-    state
-        .ip_limiter()
-        .check(&ip, now)
-        .map_err(ApiErr::rate_limited)?;
-    if known_user {
+    let locked = state.ip_limiter().check(&ip, now).and_then(|()| {
+        if known_user {
+            state.account_limiter().check(&creds.username, now)
+        } else {
+            Ok(())
+        }
+    });
+    if let Err(wait) = locked {
         state
-            .account_limiter()
-            .check(&creds.username, now)
-            .map_err(ApiErr::rate_limited)?;
+            .audit()
+            .record(&actor, "session.sign_in", "", Err("rate_limited"));
+        return Err(ApiErr::rate_limited(wait));
+    }
+
+    // The attempt is counted before the password is checked, and a correct
+    // password clears the count below. The check waits for a free slot, and
+    // many requests sent at once would otherwise all pass the lock above
+    // before the first of them is counted.
+    state.ip_limiter().failure(&ip, now);
+    if known_user {
+        state.account_limiter().failure(&creds.username, now);
     }
 
     let hash = known_user.then(|| creds.password_hash.clone());
     if !state.verify_password(login.password, hash).await? {
-        state.ip_limiter().failure(&ip, now);
-        if known_user {
-            state.account_limiter().failure(&creds.username, now);
-        }
         tracing::warn!(%ip, "failed sign-in");
         state
             .audit()
@@ -211,8 +224,21 @@ pub async fn sign_in(
 }
 
 /// `DELETE /api/v1/session`
-pub async fn sign_out(State(state): State<AppState>, headers: HeaderMap) -> Response {
+pub async fn sign_out(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Response {
     if let Some(id) = session_cookie(&headers, cookie_name(&state)) {
+        // Only a session that was live is recorded.
+        if let Some(username) = state.sessions().touch(id, Instant::now()) {
+            let actor = Actor {
+                username,
+                ip: client_ip(&state, &headers, peer),
+                session: String::new(),
+            };
+            state.audit().record(&actor, "session.sign_out", "", Ok(()));
+        }
         state.sessions().revoke(id);
         state.terminals().stop(Some(id));
     }
@@ -240,19 +266,31 @@ pub async fn change_password(
         .ip_limiter()
         .check(&ip, now)
         .map_err(ApiErr::rate_limited)?;
+    // Counted before the check and cleared after a correct password, as in
+    // `sign_in`.
+    state.ip_limiter().failure(&ip, now);
     let hash = Some(creds.password_hash.clone());
     if !state
         .verify_password(change.current_password.clone(), hash)
         .await?
     {
-        state.ip_limiter().failure(&ip, now);
         tracing::warn!(%ip, "wrong current password on password change");
+        let actor = Actor {
+            username: authed.username.clone(),
+            ip: client_ip(&state, &headers, peer),
+            session: String::new(),
+        };
+        state
+            .audit()
+            .record(&actor, "session.change_password", "", Err("wrong_password"));
         return Err(ApiErr::new(
             StatusCode::FORBIDDEN,
             "wrong_password",
             "The current password is wrong.",
         ));
     }
+
+    state.ip_limiter().success(&ip);
 
     if change.new_password == change.current_password {
         return Err(ApiErr::new(

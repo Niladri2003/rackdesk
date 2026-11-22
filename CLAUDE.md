@@ -1,10 +1,10 @@
 # RackDesk
 
-A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with a React UI embedded. Users sign in and manage the server with windows and apps instead of SSH. It must stay light (about 10-30 MB RAM idle) and is treated as **remote root access with a web UI**, so security rules come before convenience.
+A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with a React UI embedded, and an optional root program (`rackdesk-root`). Users sign in and manage the server with windows and apps instead of SSH. It must stay light (about 10-30 MB RAM idle) and is treated as **remote root access with a web UI**, so security rules come before convenience.
 
 **Goal:** the server tool people most want to install: useful in the first 5 minutes, a replacement for SSH in daily work, safe, light, and open source. The 5 product goals are at the top of `docs/ROADMAP.md`. Check every feature against them.
 
-**Status:** M0 to M6 are done: skeleton, sign-in and sessions, desktop shell, file browser (read and write), the privilege split with the root helper, and the terminal. M7 (release) is next. `docs/ROADMAP.md` is the source of truth for what to build and in what order. Don't build ahead of the current milestone.
+**Status:** M0 to M7 are done: skeleton, sign-in and sessions, desktop shell, file browser (read and write), the privilege split with the root program, the terminal, and the release work (installer, systemd units, packages, signed releases, demo mode). Version 1 is feature complete and not published yet. v1.5 is next. `docs/ROADMAP.md` is the source of truth for what to build and in what order. Don't build ahead of the current milestone.
 
 ## Important rules for every change
 **Important 1:** The hyphen (-) is the only dash. No em-dash, no en-dash, anywhere in any file, including numeric ranges (write 1-20) and empty-cell placeholders in tables. Do not use other AI-like words, phrases or symbols. Do not use emoji in codebase, may use in documentation only if very apt. Use simple short phrases; convey technical meaning only; use simple english language but without removing any technical term or meaning; remove filler words; avoid nominalizations; write one idea per sentence; skip throat-clearing openers; use concrete terms; remove redundant qualifiers; use digits for numbers. No metaphor or personification in technical statements; state the behavior literally: write "a partial report is scored and enters the benchmark", never "a partial is a full citizen".
@@ -25,14 +25,17 @@ A desktop for a Linux server, in the browser: one Rust binary (`rackdeskd`) with
 | `crates/rd-api` | API types only. Exported to TypeScript by ts-rs |
 | `crates/rd-fs` | All file access, confined beneath one root (cap-std) |
 | `crates/rd-auth` | Accounts, argon2id, credential store, sessions, limit on password guessing |
-| `crates/rd-helper-proto` | The messages between the server and the root helper |
-| `crates/rackdesk-helper` | The small program that runs as root. Linux only |
+| `crates/rd-root-proto` | The messages between the server and the root program |
+| `crates/rackdesk-root` | The small program that runs as root. Linux only |
 | `crates/rackdeskd` | The server: axum routes, sign-in, CSRF check, HTTPS, security headers, embedded UI |
 | `web/` | React + TypeScript + Vite UI |
+| `site/` | The landing page (Astro), published with Netlify |
+| `packaging/` | `install.sh`, `uninstall.sh`, the systemd units, the settings file and the package config |
+| `scripts/` | Build, test and release scripts |
 | `assets/logo/` | The logo files (SVG and PNG) and their rules |
 | `docs/` | Roadmap, architecture, security plan, ADRs, design brief, journals |
 
-More specific guides: `crates/CLAUDE.md` (Rust) and `web/CLAUDE.md` (UI).
+More specific guides: `crates/CLAUDE.md` (Rust), `web/CLAUDE.md` (UI) and `site/CLAUDE.md` (landing page).
 
 ## Commands
 ```sh
@@ -46,11 +49,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                           # also regenerates web/src/api/generated/*.ts
 cd web && npm run lint && npm run build
 ```
-`make run`, `make web` and `make check` run the same commands. `make e2e` runs the browser tests (Playwright and axe); run it after any UI change. `make test-linux` runs the Linux-only code (the root helper) in a container; run it after any change to `rd-fs`, `rd-helper-proto` or `rackdesk-helper`. `make help` lists all targets.
+`make run`, `make web` and `make check` run the same commands. `make e2e` runs the browser tests (Playwright and axe); run it after any UI change. `make test-linux` runs the Linux-only code (the root program) in a container; run it after any change to `rd-fs`, `rd-root-proto` or `rackdesk-root`. `make test-release` builds a release and installs, updates and removes it in a container with systemd; run it after any change to `packaging/`, to the start-up of the server or to the data folder. `make local-release ARCH=x86_64` builds a release signed with a throwaway key into `rd-release/`, for a test on a real server. `make demo` starts the server with sample files only. `make help` lists all targets.
 One crate: `cargo test -p rd-fs`. One test: `cargo test -p rd-fs symlink`.
 
 ## Rules that are never broken
-These come from `docs/security/SECURITY.md`. Read it before touching auth, file access, the terminal or the helper.
+These come from `docs/security/SECURITY.md`. Read it before touching auth, file access, the terminal or the root program.
 - **Server-side checks are the security.** The UI hiding a button is never a control.
 - **File paths from a request go through `rd_fs::Root` only.** No `std::fs` or `tokio::fs` with request data anywhere else.
 - **Never log secrets:** passwords, session ids, tokens. The initial password is printed with `println!`, not `tracing`.
@@ -59,6 +62,8 @@ These come from `docs/security/SECURITY.md`. Read it before touching auth, file 
 - **Listen on localhost by default.** Nothing makes the server more exposed without an explicit flag.
 - **Nothing runs in the background that nobody is looking at.** No polling, indexing or sampling without an open window.
 - **Work with the server as it is.** Read existing systemd units, containers and configs. Never require RackDesk's own layout.
+- **The installer installs nothing it has not checked.** The signature of the checksum list is checked first, then the checksum of the download.
+- **Every path the installer writes is in `uninstall.sh` too.** `rackdesk-uninstall` must leave nothing behind.
 
 ## How work is done here
 - **A milestone is done when** its "Done when" line in the roadmap is true, the checks pass, the docs match the code, and `docs/journal/M<n>.md` is written (what was done, notes, what's next).
